@@ -1,0 +1,44 @@
+# ─── Configuración local de Claude Code ──────────────────────────────────────
+# Permisos de shell concedidos en esta sesión/máquina. No portables entre
+# desarrolladores. Cada quien genera el suyo al trabajar con Claude Code.
+.claude/settings.local.json
+
+# ─── Skill de Impeccable (dependencia de herramienta) ────────────────────────
+# Instalado con: npx impeccable skills install
+# Equivale a node_modules — se reinstala, no se versiona.
+.claude/skills/
+
+# ─── Datos de runtime de Impeccable ──────────────────────────────────────────
+# live/config.json: setup del servidor local, específico de esta máquina.
+# critique/: snapshots generados automáticamente durante sesiones de diseño.
+# design.json sí va al repo (es el sidecar del sistema de diseño del proyecto).
+.impeccable/live/
+.impeccable/critique/
+
+# ─── Artefactos de Windows (NTFS Alternate Data Streams) ─────────────────────
+# Windows crea estos archivos al descargar cualquier archivo de internet.
+# Pueden contener URLs de origen con identificadores personales.
+*:Zone.Identifier
+
+# ─── Dependencias ─────────────────────────────────────────────────────────────
+node_modules/
+
+# ─── Sistema operativo ────────────────────────────────────────────────────────
+.DS_Store
+.DS_Store?
+._*
+Thumbs.db
+Desktop.ini
+ehthumbs.db
+
+# ─── Editores ─────────────────────────────────────────────────────────────────
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# ─── Logs y temporales ────────────────────────────────────────────────────────
+*.log
+npm-debug.log*
+/tmp/

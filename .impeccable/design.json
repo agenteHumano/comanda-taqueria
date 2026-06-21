@@ -1,0 +1,125 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": "2026-06-20T00:00:00Z",
+  "title": "Design System: Comanda Taquería",
+  "extensions": {
+    "colorMeta": {
+      "bg":         { "role": "neutral",   "displayName": "Carbón",          "canonical": "oklch(0.09 0.000   0)", "tonalRamp": ["oklch(0.04 0.000 0)","oklch(0.09 0.000 0)","oklch(0.14 0.008 247)","oklch(0.22 0.012 247)","oklch(0.32 0.016 247)","oklch(0.46 0.016 247)","oklch(0.62 0.012 247)","oklch(0.80 0.008 247)"] },
+      "surface":    { "role": "neutral",   "displayName": "Panel",            "canonical": "oklch(0.20 0.014 247)", "tonalRamp": ["oklch(0.06 0.005 247)","oklch(0.12 0.010 247)","oklch(0.20 0.014 247)","oklch(0.28 0.016 247)","oklch(0.38 0.018 247)","oklch(0.52 0.016 247)","oklch(0.68 0.012 247)","oklch(0.84 0.008 247)"] },
+      "surface-2":  { "role": "neutral",   "displayName": "Tecla",            "canonical": "oklch(0.30 0.018 247)", "tonalRamp": ["oklch(0.08 0.006 247)","oklch(0.16 0.012 247)","oklch(0.24 0.015 247)","oklch(0.30 0.018 247)","oklch(0.40 0.018 247)","oklch(0.54 0.016 247)","oklch(0.70 0.012 247)","oklch(0.86 0.008 247)"] },
+      "ink":        { "role": "neutral",   "displayName": "Tinta",            "canonical": "oklch(0.94 0.005 247)", "tonalRamp": ["oklch(0.20 0.014 247)","oklch(0.34 0.016 247)","oklch(0.48 0.014 247)","oklch(0.62 0.012 247)","oklch(0.74 0.010 247)","oklch(0.84 0.008 247)","oklch(0.90 0.006 247)","oklch(0.94 0.005 247)"] },
+      "ink-muted":  { "role": "neutral",   "displayName": "Tinta Atenuada",   "canonical": "oklch(0.52 0.010 247)", "tonalRamp": ["oklch(0.15 0.008 247)","oklch(0.24 0.010 247)","oklch(0.34 0.010 247)","oklch(0.44 0.010 247)","oklch(0.52 0.010 247)","oklch(0.64 0.010 247)","oklch(0.76 0.008 247)","oklch(0.88 0.006 247)"] },
+      "primary":    { "role": "primary",   "displayName": "Azul Instrumento", "canonical": "oklch(0.82 0.170 247)", "tonalRamp": ["oklch(0.20 0.120 247)","oklch(0.30 0.140 247)","oklch(0.42 0.155 247)","oklch(0.54 0.165 247)","oklch(0.66 0.170 247)","oklch(0.75 0.170 247)","oklch(0.82 0.170 247)","oklch(0.90 0.130 247)"] },
+      "accent":     { "role": "secondary", "displayName": "Ámbar de Alerta",  "canonical": "oklch(0.62 0.220  65)", "tonalRamp": ["oklch(0.20 0.130  65)","oklch(0.30 0.160  65)","oklch(0.40 0.185  65)","oklch(0.50 0.205  65)","oklch(0.62 0.220  65)","oklch(0.73 0.200  65)","oklch(0.83 0.170  65)","oklch(0.92 0.110  65)"] },
+      "error":      { "role": "tertiary",  "displayName": "Rojo Error",       "canonical": "oklch(0.62 0.220  25)", "tonalRamp": ["oklch(0.22 0.140  25)","oklch(0.32 0.165  25)","oklch(0.42 0.190  25)","oklch(0.52 0.210  25)","oklch(0.62 0.220  25)","oklch(0.72 0.200  25)","oklch(0.82 0.160  25)","oklch(0.92 0.090  25)"] }
+    },
+    "typographyMeta": {
+      "ui":      { "displayName": "Interfaz",    "purpose": "Texto general, labels, encabezados de sección." },
+      "label":   { "displayName": "Label",       "purpose": "Estados de mesa, badges, texto de acción secundaria." },
+      "key":     { "displayName": "Tecla",       "purpose": "Etiquetas de todas las teclas del teclado de captura." },
+      "ticket":  { "displayName": "Ticket",      "purpose": "Historial de burbujas y vista previa del borrador. Monospace funcional — alineación de columnas tipo ticket de cocina." },
+      "display": { "displayName": "Cantidad",    "purpose": "Número grande de cantidad activa sobre el teclado. Un solo elemento en pantalla." }
+    },
+    "shadows": [
+      { "name": "key-definition",  "value": "0 1px 0 oklch(0 0 0 / 0.4), inset 0 1px 0 oklch(1 0 0 / 0.06)", "purpose": "Perfil físico de tecla en product keys y number keys. Confirma que el elemento es tappable." },
+      { "name": "app-container",   "value": "0 0 0 1px oklch(0.20 0.014 247), 0 24px 80px oklch(0 0 0 / 0.6)", "purpose": "Sombra del contenedor de la app en desktop. Separa el contenedor del fondo oscuro del body." }
+    ],
+    "motion": [
+      { "name": "ease-out-quart", "value": "cubic-bezier(0.25, 1, 0.5, 1)", "purpose": "Easing estándar para todas las transiciones de estado." },
+      { "name": "dur-fast",       "value": "100ms",  "purpose": "Press feedback en teclas y botones. Tiene que sentirse instantáneo." },
+      { "name": "dur-base",       "value": "180ms",  "purpose": "Animación de entrada de burbuja. Lo más lento que la UI debería hacer." },
+      { "name": "dur-slow",       "value": "280ms",  "purpose": "Reservado — no se usa actualmente en el flujo principal." }
+    ],
+    "breakpoints": [
+      { "name": "mobile-cap", "value": "430px", "purpose": "Ancho máximo de la app. En viewport mayor, se centra con fondo oscuro alrededor." },
+      { "name": "sm",         "value": "480px", "purpose": "Teclas y gaps levemente más grandes." },
+      { "name": "md",         "value": "520px", "purpose": "Activa el contenedor centrado con sombra de desktop." }
+    ]
+  },
+  "components": [
+    {
+      "name": "Botón Enviar",
+      "kind": "button",
+      "refersTo": "btn-enviar",
+      "description": "Acción primaria del teclado — envía la comanda activa. Posición análoga a la tecla Enter/Send de apps de mensajería.",
+      "html": "<button class=\"ds-btn-enviar\">Enviar <svg xmlns=\"http://www.w3.org/2000/svg\" width=\"18\" height=\"18\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2.5\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><line x1=\"22\" y1=\"2\" x2=\"11\" y2=\"13\"/><polygon points=\"22 2 15 22 11 13 2 9 22 2\"/></svg></button>",
+      "css": ".ds-btn-enviar { display: inline-flex; align-items: center; justify-content: center; gap: 8px; background: oklch(0.82 0.170 247); color: oklch(0.10 0.030 247); border: none; border-radius: 6px; height: 52px; padding: 0 24px; font-size: 1rem; font-weight: 700; font-family: system-ui, sans-serif; cursor: pointer; transition: background 100ms cubic-bezier(0.25,1,0.5,1), transform 100ms cubic-bezier(0.25,1,0.5,1); -webkit-tap-highlight-color: transparent; } .ds-btn-enviar:active { background: oklch(0.74 0.160 247); transform: scale(0.96); } .ds-btn-enviar:disabled { opacity: 0.35; pointer-events: none; } .ds-btn-enviar:focus-visible { outline: 2px solid oklch(0.82 0.170 247); outline-offset: 2px; }"
+    },
+    {
+      "name": "Tecla Producto",
+      "kind": "button",
+      "refersTo": "key-producto",
+      "description": "Las 10 teclas de producto del teclado (PA, AS, BI, etc.). El elemento más tocado de toda la app.",
+      "html": "<button class=\"ds-key-producto\">PA</button>",
+      "css": ".ds-key-producto { display: flex; align-items: center; justify-content: center; background: oklch(0.30 0.018 247); color: oklch(0.94 0.005 247); border: none; border-radius: 6px; height: 48px; min-width: 0; font-size: 0.875rem; font-weight: 700; font-family: system-ui, sans-serif; letter-spacing: 0.01em; cursor: pointer; box-shadow: 0 1px 0 oklch(0 0 0 / 0.4), inset 0 1px 0 oklch(1 0 0 / 0.06); transition: background 100ms cubic-bezier(0.25,1,0.5,1), transform 100ms cubic-bezier(0.25,1,0.5,1); -webkit-tap-highlight-color: transparent; touch-action: manipulation; } .ds-key-producto:active { background: oklch(0.38 0.022 247); transform: scale(0.92); }"
+    },
+    {
+      "name": "Tecla Modificador Activo",
+      "kind": "button",
+      "refersTo": "key-mod-applied",
+      "description": "Un modificador (S/C, S/V, S/Ci) cuando está aplicado al último producto tocado.",
+      "html": "<button class=\"ds-key-mod ds-key-mod--active\">S/C</button>",
+      "css": ".ds-key-mod { display: flex; align-items: center; justify-content: center; background: oklch(0.20 0.014 247); color: oklch(0.52 0.010 247); border: none; border-radius: 6px; height: 40px; font-size: 0.6875rem; font-weight: 700; font-family: system-ui, sans-serif; letter-spacing: 0.01em; cursor: pointer; transition: background 100ms cubic-bezier(0.25,1,0.5,1), color 100ms cubic-bezier(0.25,1,0.5,1), transform 100ms cubic-bezier(0.25,1,0.5,1); -webkit-tap-highlight-color: transparent; } .ds-key-mod--active { background: oklch(0.82 0.170 247 / 0.18); color: oklch(0.82 0.170 247); } .ds-key-mod:active { transform: scale(0.92); }"
+    },
+    {
+      "name": "Mesa Card — Vacía",
+      "kind": "card",
+      "refersTo": "mesa-card",
+      "description": "Tarjeta de mesa sin actividad. El número grande es lo único visible.",
+      "html": "<button class=\"ds-mesa-card\"><span class=\"ds-mesa-num\">5</span></button>",
+      "css": ".ds-mesa-card { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px; background: oklch(0.20 0.014 247); border: none; border-radius: 10px; min-height: 80px; padding: 16px 8px; cursor: pointer; transition: background 100ms cubic-bezier(0.25,1,0.5,1), transform 100ms cubic-bezier(0.25,1,0.5,1); -webkit-tap-highlight-color: transparent; } .ds-mesa-card:active { background: oklch(0.30 0.018 247); transform: scale(0.96); } .ds-mesa-num { font-size: 2.25rem; font-weight: 700; line-height: 1; letter-spacing: -0.03em; color: oklch(0.94 0.005 247); font-family: system-ui, sans-serif; }"
+    },
+    {
+      "name": "Mesa Card — En Construcción",
+      "kind": "card",
+      "refersTo": "mesa-card-borrador",
+      "description": "Mesa con pedido activo en borrador. Ring ámbar señala actividad sin interrumpir.",
+      "html": "<button class=\"ds-mesa-card ds-mesa-card--borrador\"><span class=\"ds-mesa-num\">3</span><span class=\"ds-mesa-status\">en construcción</span></button>",
+      "css": ".ds-mesa-card { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px; background: oklch(0.20 0.014 247); border: none; border-radius: 10px; min-height: 80px; padding: 16px 8px; cursor: pointer; -webkit-tap-highlight-color: transparent; transition: background 100ms, transform 100ms; } .ds-mesa-card--borrador { box-shadow: 0 0 0 1.5px oklch(0.62 0.220 65); } .ds-mesa-card:active { transform: scale(0.96); } .ds-mesa-num { font-size: 2.25rem; font-weight: 700; line-height: 1; letter-spacing: -0.03em; color: oklch(0.94 0.005 247); font-family: system-ui, sans-serif; } .ds-mesa-status { font-size: 0.6875rem; font-weight: 500; color: oklch(0.62 0.220 65); font-family: system-ui, sans-serif; }"
+    },
+    {
+      "name": "Burbuja de Historial",
+      "kind": "card",
+      "refersTo": "burbuja",
+      "description": "Comanda ya enviada en el historial. Alineada a la derecha como mensaje de chat; tipografía monospace para lectura tipo ticket.",
+      "html": "<div class=\"ds-burbuja\"><div class=\"ds-burbuja-ticket\">3 PA · 2 AS [S/C]</div></div>",
+      "css": ".ds-burbuja { align-self: flex-end; max-width: 88%; background: oklch(0.20 0.014 247); border-radius: 16px 6px 16px 16px; padding: 12px 16px; animation: ds-burbuja-in 180ms cubic-bezier(0.25,1,0.5,1); } @keyframes ds-burbuja-in { from { opacity: 0; transform: translateY(8px) scale(0.97); } to { opacity: 1; transform: none; } } @media (prefers-reduced-motion: reduce) { .ds-burbuja { animation: none; } } .ds-burbuja-ticket { font-family: 'JetBrains Mono', 'Fira Code', monospace; font-size: 0.8125rem; line-height: 1.6; color: oklch(0.94 0.005 247); white-space: pre; }"
+    }
+  ],
+  "narrative": {
+    "northStar": "El Ticket de Cocina",
+    "overview": "Este sistema se construye como un ticket térmico digital: monoespaciado donde importa, sin color donde no hay función, oscuro como la cocina en turno de noche. La interfaz no busca impresionar — busca desaparecer. El mesero no debería pensar en la app; debería pensar en el pedido.\n\nLa atmósfera es la de una herramienta de oficio profesional usada bajo presión: ruido de plancha, calor, luz variable, prisa. Cada decisión visual viene de ese contexto real. El fondo es carbón porque un fondo blanco deslumbra. Los botones son grandes porque los dedos se mueven rápido. El monospace en los tickets es porque un ticket de cocina tiene que leerse de un vistazo desde otro ángulo.\n\nLo que este sistema rechaza explícitamente: la estética de apps de delivery para clientes (Rappi, UberEats — fotos de comida, carrito de compras, tonos cálidos de marketing), el onboarding elaborado, las animaciones decorativas, y todo lo que haga sentir que esto fue diseñado para impresionar a alguien en lugar de para que funcione bajo presión.",
+    "keyCharacteristics": [
+      "Oscuro por necesidad operativa, no por moda",
+      "Monospace en el historial y borrador — el ticket como lenguaje",
+      "Un solo acento cromático (cobalt) para acciones; ámbar solo para estados de alerta",
+      "Botones grandes como teclas de caja registradora real",
+      "Sin texto instructivo — la posición y la forma comunican"
+    ],
+    "rules": [
+      { "name": "La Regla del Color Funcional",    "body": "Si un elemento usa color y no es una acción primaria (cobalt) ni un estado de alerta/en-construcción (ámbar) ni un error (rojo), el color está de más. Quítalo.", "section": "colors" },
+      { "name": "La Regla de la Rareza",           "body": "El Azul Instrumento aparece en ≤15% de cualquier pantalla. Su escasez es lo que lo hace visible como señal de acción.", "section": "colors" },
+      { "name": "La Regla del Monospace Funcional","body": "JetBrains Mono aparece únicamente en el historial y el borrador. Fuera de esos dos contextos, cualquier monospace es decorativo y está prohibido.", "section": "typography" },
+      { "name": "La Regla Plana por Defecto",      "body": "Fuera de las teclas del teclado y el contenedor de desktop, ningún elemento tiene sombra. Profundidad = diferencia de luminosidad entre superficies.", "section": "elevation" }
+    ],
+    "dos": [
+      "Do usar Azul Instrumento exclusivamente para acciones primarias, estados activos de teclado, e indicadores de 'N enviadas'.",
+      "Do usar JetBrains Mono únicamente en el historial de burbujas y la vista previa del borrador.",
+      "Do mantener el botón Enviar como el elemento más visualmente prominente del teclado.",
+      "Do comunicar el estado de las mesas solo mediante ring de color + texto de estado en la misma paleta.",
+      "Do escalar el fondo de las teclas claramente por encima del fondo de la app (surface-2 L=0.30 sobre bg L=0.09).",
+      "Do respetar área de toque mínima de 44px en todos los elementos interactivos."
+    ],
+    "donts": [
+      "Don't usar fotos de comida, íconos de carrito, flujos de selección de categorías, ni ningún elemento visual asociado con apps de delivery para clientes.",
+      "Don't agregar onboarding elaborado, pantallas de bienvenida, ni animaciones de entrada al cargar.",
+      "Don't usar border-left o border-right mayor a 1px como acento de color en tarjetas o ítems de lista.",
+      "Don't usar gradient text (background-clip: text con gradiente).",
+      "Don't usar glassmorphism ni blur decorativo.",
+      "Don't usar monospace fuera del historial y el borrador.",
+      "Don't agregar texto instructivo persistente explicando qué hace cada control.",
+      "Don't usar colores de acento en elementos inactivos o decorativos.",
+      "Don't reducir el contraste de las teclas para verse más sutil."
+    ]
+  }
+}

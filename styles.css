@@ -674,7 +674,7 @@ input {
 
 /* Nota button — inline inside mods+nota row */
 .btn-nota {
-  flex: 1.5;
+  flex: 0 0 96px;
   height: 44px;
   background: var(--surface);
   color: var(--ink-muted);

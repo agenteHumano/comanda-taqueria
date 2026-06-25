@@ -1,5 +1,5 @@
 /* ─── Catálogos ──────────────────────────────────────────────── */
-const PRODUCTOS = [
+const TACOS = [
   { sku: 'PA',  name: 'Pastor' },
   { sku: 'AS',  name: 'Asada' },
   { sku: 'BI',  name: 'Bistec' },
@@ -9,8 +9,23 @@ const PRODUCTOS = [
   { sku: 'QU',  name: 'Quesadilla' },
   { sku: 'VOL', name: 'Volcán' },
   { sku: 'BUR', name: 'Burrito' },
-  { sku: 'REF', name: 'Refresco' },
+  { sku: 'RA',  name: 'Rajas' },
 ];
+
+const BEBIDAS = [
+  { sku: 'REF', name: 'Refresco' },
+  { sku: 'AGU', name: 'Agua' },
+  { sku: 'CER', name: 'Cerveza' },
+  { sku: 'JAR', name: 'Jarrito' },
+  { sku: 'LIM', name: 'Limonada' },
+  { sku: 'ORG', name: 'Horchata' },
+  { sku: 'TAM', name: 'Tamarindo' },
+  { sku: 'MAN', name: 'Mango' },
+  { sku: 'TOM', name: 'Tomate' },
+  { sku: 'JUG', name: 'Jugo' },
+];
+
+const PRODUCTOS = [...TACOS, ...BEBIDAS];
 
 const MODIFICADORES = ['C/T', 'S/V', 'S/C', 'S/Ci'];
 
@@ -277,12 +292,12 @@ function abrirNota() {
   mesa.borrador.notaEditando = true;
 
   const wrapper = document.querySelector('.nota-input-wrapper');
-  const btnNota = document.querySelector('.btn-nota');
+  const modsRow = document.querySelector('.mods-nota-row');
   const input = document.querySelector('.nota-input');
   const plato = platoActivo(mesa.borrador);
 
   wrapper.classList.add('visible');
-  btnNota.style.display = 'none';
+  if (modsRow) modsRow.style.display = 'none';
   input.value = plato.note || '';
   input.focus();
 }
@@ -292,14 +307,14 @@ function cerrarNota() {
   const b = mesa.borrador;
   const input = document.querySelector('.nota-input');
   const wrapper = document.querySelector('.nota-input-wrapper');
-  const btnNota = document.querySelector('.btn-nota');
+  const modsRow = document.querySelector('.mods-nota-row');
 
   const plato = platoActivo(b);
   plato.note = input ? input.value.trim() : '';
   b.notaEditando = false;
 
   if (wrapper) wrapper.classList.remove('visible');
-  if (btnNota) btnNota.style.display = '';
+  if (modsRow) modsRow.style.display = '';
 
   saveState();
   renderBorrador();
@@ -626,8 +641,8 @@ function actualizarBtnNota() {
   const plato = platoActivo(mesa.borrador);
   btn.classList.toggle('has-nota', !!plato.note.trim());
   btn.querySelector('.btn-nota-texto').textContent = plato.note.trim()
-    ? 'Nota: ' + plato.note.trim().slice(0, 28) + (plato.note.length > 28 ? '…' : '')
-    : 'Nota para este plato';
+    ? plato.note.trim().slice(0, 12) + (plato.note.length > 12 ? '…' : '')
+    : 'Nota';
 }
 
 /* ─── Construcción del DOM ───────────────────────────────────── */
@@ -670,16 +685,6 @@ function buildDOM() {
       <!-- Teclado -->
       <div class="teclado">
 
-        <!-- Cantidad + Modificadores -->
-        <div class="cantidad-row">
-          <span class="cantidad-display placeholder" id="cantidad-display" aria-label="Cantidad" aria-live="polite">1</span>
-          <div class="mods-inline">
-            ${MODIFICADORES.map(m =>
-              `<button class="key-mod" data-mod="${m}" aria-label="${modAriaLabel(m)}">${m}</button>`
-            ).join('')}
-          </div>
-        </div>
-
         <!-- Números -->
         <div class="key-row">
           ${[1,2,3,4,5,6,7,8,9,0].map(d =>
@@ -687,14 +692,21 @@ function buildDOM() {
           ).join('')}
         </div>
 
-        <!-- Productos -->
+        <!-- Tacos -->
         <div class="key-row">
-          ${PRODUCTOS.map(p =>
+          ${TACOS.map(p =>
             `<button class="key-producto" data-sku="${p.sku}" aria-label="${p.name}" title="${p.name}">${p.sku}</button>`
           ).join('')}
         </div>
 
-        <!-- Nota -->
+        <!-- Bebidas -->
+        <div class="key-row">
+          ${BEBIDAS.map(p =>
+            `<button class="key-producto" data-sku="${p.sku}" aria-label="${p.name}" title="${p.name}">${p.sku}</button>`
+          ).join('')}
+        </div>
+
+        <!-- Nota input (visible al editar) -->
         <div class="nota-input-wrapper">
           <div class="nota-input-row">
             <input class="nota-input" type="text" placeholder="Nota para este plato…" maxlength="120">
@@ -702,14 +714,21 @@ function buildDOM() {
           </div>
           <span class="nota-counter" aria-live="polite"></span>
         </div>
-        <button class="btn-nota">
-          <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24"
-               fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-            <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/>
-            <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/>
-          </svg>
-          <span class="btn-nota-texto">Nota para este plato</span>
-        </button>
+
+        <!-- Modificadores + Nota -->
+        <div class="key-row mods-nota-row">
+          ${MODIFICADORES.map(m =>
+            `<button class="key-mod" data-mod="${m}" aria-label="${modAriaLabel(m)}">${m}</button>`
+          ).join('')}
+          <button class="btn-nota">
+            <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24"
+                 fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/>
+              <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/>
+            </svg>
+            <span class="btn-nota-texto">Nota</span>
+          </button>
+        </div>
 
         <!-- Control -->
         <div class="control-row">

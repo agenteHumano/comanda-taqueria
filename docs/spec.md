@@ -82,7 +82,9 @@ El pedido se guarda estructurado, no como texto plano. Forma final de una comand
 Reglas del modelo:
 - `mods` es un arreglo porque un mismo producto puede llevar varios modificadores combinados (ej. sin cebolla y sin cilantro a la vez).
 - `note` vive a nivel de **plato**, no a nivel de producto ni a nivel de comanda completa. Razonamiento: lo "raro" casi siempre es general al grupo, no a un taco específico, pero como es texto libre el mesero puede mencionar el producto si hace falta ("la de pastor sin limón"). Un plato puede tener `note` sin tener `items` (por ejemplo si el mesero quiere anotar algo antes de elegir productos), así que al filtrar antes de enviar hay que conservar platos que tengan nota aunque no tengan productos.
-- Catálogo de productos para esta primera versión:
+- Catálogo de productos para esta primera versión, dividido en dos grupos según la fila del teclado:
+
+**Tacos** (fila superior de productos):
 
 | SKU | Nombre |
 |---|---|
@@ -95,7 +97,22 @@ Reglas del modelo:
 | QU | Quesadilla |
 | VOL | Volcán |
 | BUR | Burrito |
+| RA | Rajas |
+
+**Bebidas** (fila inferior de productos):
+
+| SKU | Nombre |
+|---|---|
 | REF | Refresco |
+| AGU | Agua |
+| CER | Cerveza |
+| JAR | Jarrito |
+| LIM | Limonada |
+| ORG | Horchata |
+| TAM | Tamarindo |
+| MAN | Mango |
+| TOM | Tomate |
+| JUG | Jugo |
 
 - Catálogo de modificadores:
 
@@ -113,15 +130,15 @@ Reglas del modelo:
 Inspirado deliberadamente en la disposición de Gboard de Android, para que sea instantáneamente familiar, pero reemplazando el alfabeto por las funciones de la taquería:
 
 1. **Fila de números** (1-0): exactamente como la fila numérica superior de Gboard. Sirve para escribir la cantidad.
-2. **Fila de productos** (10 teclas, ancho completo): ocupa el lugar donde Gboard pondría `qwertyuiop` — no es casualidad, son exactamente 10 abreviaturas de producto para 10 teclas.
-3. **Fila de modificadores** (4 teclas: C/T, S/V, S/C, S/Ci).
-4. **Botón de nota libre** (ver 5.6).
+2. **Fila de tacos** (10 teclas, ancho completo): PA AS BI CH TR GR QU VOL BUR RA — ocupa el lugar donde Gboard pondría `qwertyuiop`.
+3. **Fila de bebidas** (10 teclas, ancho completo): REF AGU CER JAR LIM ORG TAM MAN TOM JUG.
+4. **Fila de modificadores + nota** (una sola fila): C/T · S/V · S/C · S/Ci · Nota. El botón de nota ocupa el espacio restante a la derecha de los 4 modificadores (ver 5.6).
 5. **Fila de control**, con tres botones que reutilizan el significado real de las teclas especiales de un teclado:
    - Izquierda: **Borrar** (ícono de retroceso). Mapeo directo y obvio.
    - Centro (posición de barra espaciadora, la tecla más ancha): **Siguiente plato**. La barra espaciadora separa palabras; este botón separa grupos dentro del mismo pedido — incluye un pequeño ícono de línea horizontal.
    - Derecha (posición de Enter/Return): **Enviar comanda**. Esta es la convención real en apps de mensajería (WhatsApp, Slack, iMessage): cuando estás escribiendo un mensaje, esa tecla se convierte en el botón de enviar. No va en la barra espaciadora — ese fue un error de diseño corregido durante el prototipado: el tamaño de una tecla no determina su importancia, su función sí.
 
-Encima del teclado, en vez de un campo con la etiqueta "Cantidad", solo se muestra el número grande (o "1" en gris si no se ha tocado nada), junto con tres atajos rápidos para las cantidades 1, 2 y 3 (las más comunes), inspirados en la barra de sugerencias de palabras de Gboard.
+No hay barra de cantidad separada: la fila de números comunica por sí sola qué dígito se está componiendo, y el borrador lo refleja en tiempo real (ver sección 6).
 
 ### 5.2 Flujo de captura
 
@@ -131,7 +148,6 @@ cantidad (opcional, default 1) → producto → [modificador opcional] → [nota
 
 ### 5.3 Cantidad
 - Tocar dígitos acumula un número (máximo 2 dígitos).
-- Los atajos 1/2/3 sobrescriben directamente el valor en vez de acumular.
 - Si no se toca ningún dígito antes de tocar un producto, la cantidad por default es 1.
 - Al confirmar un producto, el contador de cantidad se reinicia.
 
@@ -148,7 +164,7 @@ cantidad (opcional, default 1) → producto → [modificador opcional] → [nota
 - Es útil mostrar visualmente en la vista previa cuál es el "último producto tocado" (por ejemplo resaltándolo), para que el mesero sepa a quién le va a pegar el siguiente modificador que toque.
 
 ### 5.6 Nota libre
-- Existe un botón "Nota para este plato" debajo de los modificadores, para los casos extremos que no caben en las abreviaturas ni en los 4 modificadores predefinidos.
+- Existe un botón "Nota" en la misma fila que los modificadores (a la derecha de S/Ci), para los casos extremos que no caben en las abreviaturas ni en los 4 modificadores predefinidos.
 - Al tocarlo aparece un campo de texto normal (`<input type="text">`). No hace falta construir un teclado QWERTY: en un dispositivo real, cualquier input de texto estándar dispara automáticamente el teclado nativo del sistema operativo.
 - La nota se guarda en el **plato activo** (no en un producto específico ni en la comanda completa), como texto libre. Si el mesero necesita referirse a un producto puntual, lo escribe dentro del texto.
 - Se guarda al presionar Enter, al tocar un botón de confirmar, o al perder el foco el campo (auto-guardado al tocar fuera).
@@ -173,6 +189,8 @@ Un solo botón de "Borrar" con esta prioridad, en orden:
 ## 6. Historial y vista previa
 
 Tanto el borrador en construcción como las comandas ya enviadas se muestran con el mismo formato de "ticket": cada plato es una línea con los productos separados por " · " (ej. `3 PA · 3 AS`), y entre un plato y el siguiente va una línea divisoria (no es texto, es un separador visual). Si un producto tiene modificadores, se muestran junto a él de forma compacta. Si un plato tiene nota, se muestra debajo en una línea aparte, en cursiva.
+
+El borrador funciona en tiempo real, como un campo de texto: cada teclazo aparece al instante. El dígito tecleado antes de confirmar un producto se muestra en color muted al final de la línea activa; al tocar el producto se fusiona con él y adopta el color normal del ticket. Un cursor parpadeante al final de la línea activa refuerza la metáfora de escritura. El placeholder desaparece en cuanto se toca el primer dígito. El JSON estructurado no cambia — esta es solo la representación visual.
 
 Las comandas ya enviadas tienen además una vista expandible "para cocina", con este formato más explícito:
 
@@ -216,8 +234,8 @@ El mesero puede entrar a una mesa, capturar parcialmente un pedido, regresar a l
 - [ ] Navegación a la pantalla de Comanda al tocar una mesa o pedido especial, con botón de regreso.
 - [ ] Historial de comandas enviadas como burbujas, con formato de ticket y vista expandible para cocina.
 - [ ] Vista previa del pedido en construcción, en el mismo formato de ticket.
-- [ ] Teclado con fila de números, fila de 10 productos, fila de 4 modificadores, botón de nota libre, y fila de control (Borrar / Siguiente plato / Enviar) en ese orden de izquierda a derecha.
-- [ ] Cantidad por dígitos + atajos rápidos 1/2/3, con default de 1 si no se especifica.
+- [ ] Teclado con fila de números, fila de tacos (10 teclas), fila de bebidas (10 teclas), fila de modificadores + nota (C/T S/V S/C S/Ci + botón Nota inline), y fila de control (Borrar / Siguiente plato / Enviar).
+- [ ] Cantidad por dígitos, con default de 1 si no se especifica. Dígito pendiente visible en tiempo real en el borrador con cursor parpadeante.
 - [ ] Productos se agregan al plato activo, sumando cantidad si el producto se repite.
 - [ ] Modificadores aplican al último producto tocado, combinables, con C/T como acción de limpiar.
 - [ ] Nota libre por plato vía input de texto nativo.

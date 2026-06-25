@@ -558,24 +558,41 @@ function renderBorrador() {
   const b = mesa.borrador;
   const todosVacios = b.platos.every(p => p.items.length === 0 && !p.note.trim());
 
-  if (todosVacios) {
+  if (todosVacios && !b.cantDigitos) {
     cont.innerHTML = '<div class="borrador-empty">Toca un producto para comenzar</div>';
     return;
   }
 
-  // Construir HTML del ticket: una línea por plato, items separados por " · "
+  const cursor = '<span class="cursor" aria-hidden="true"></span>';
   const lines = [];
+
   b.platos.forEach((plato, pi) => {
     if (pi > 0) lines.push('<hr class="ticket-sep">');
+
+    const active = pi === b.platos.length - 1;
+
     if (plato.items.length > 0) {
-      const isActivePlate = pi === b.platos.length - 1;
       const itemsLine = plato.items.map(item => {
         const text = escapeHtml(formatTicketLine(item));
-        const isActive = isActivePlate && item.sku === b.lastSku;
-        return isActive ? `<span class="active-item">${text}</span>` : text;
+        const isActiveItem = active && item.sku === b.lastSku;
+        return isActiveItem ? `<span class="active-item">${text}</span>` : text;
       }).join(' · ');
-      lines.push(itemsLine);
+
+      if (active && b.cantDigitos) {
+        lines.push(itemsLine + ' · <span class="pending-digit">' + escapeHtml(b.cantDigitos) + '</span>' + cursor);
+      } else if (active) {
+        lines.push(itemsLine + cursor);
+      } else {
+        lines.push(itemsLine);
+      }
+    } else if (active) {
+      if (b.cantDigitos) {
+        lines.push('<span class="pending-digit">' + escapeHtml(b.cantDigitos) + '</span>' + cursor);
+      } else {
+        lines.push(cursor);
+      }
     }
+
     if (plato.note.trim()) {
       lines.push(`<span class="ticket-note">${escapeHtml(plato.note)}</span>`);
     }

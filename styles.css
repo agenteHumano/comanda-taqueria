@@ -574,6 +574,32 @@ input {
   font-weight: 700;
 }
 
+/* Dígito pendiente — tecleado pero sin producto confirmado todavía */
+.borrador-ticket .pending-digit {
+  color: var(--ink-muted);
+}
+
+/* Cursor parpadeante al final de la línea activa */
+.borrador-ticket .cursor {
+  display: inline-block;
+  width: 2px;
+  height: 0.8em;
+  background: var(--ink-muted);
+  margin-left: 1px;
+  vertical-align: middle;
+  border-radius: 1px;
+  animation: cursor-blink 900ms step-end infinite;
+}
+
+@keyframes cursor-blink {
+  0%, 100% { opacity: 1; }
+  50%       { opacity: 0; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .borrador-ticket .cursor { animation: none; }
+}
+
 /* ─── Teclado ────────────────────────────────────────────────── */
 .teclado {
   flex-shrink: 0;

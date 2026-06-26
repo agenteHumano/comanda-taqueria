@@ -702,11 +702,6 @@ input[type="number"]::-webkit-inner-spin-button { -webkit-appearance: none; }
   color: var(--primary);
 }
 
-/* CT key: clears, use accent color */
-.key-mod[data-mod="C/T"]:active {
-  background: var(--accent-a18);
-}
-
 /* Nota button — inline inside mods+nota row */
 .btn-nota {
   flex: 0 0 96px;

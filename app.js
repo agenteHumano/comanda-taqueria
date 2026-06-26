@@ -32,11 +32,6 @@ const ESPECIALES = [
 ];
 
 /* ─── Configuración ──────────────────────────────────────────── */
-const DEFAULT_PRODUCTS = {
-  tacos:  TACOS.map(p  => ({ ...p })),
-  drinks: BEBIDAS.map(p => ({ ...p })),
-};
-
 const DEFAULT_MODIFIERS = [
   { sku: 'S/V',  name: 'Sin verdura',  enabled: true  },
   { sku: 'S/C',  name: 'Sin cebolla',  enabled: true  },
@@ -51,8 +46,8 @@ let config = {
   waiterName: '',
   tableCount: 10,
   products: {
-    tacos:  DEFAULT_PRODUCTS.tacos.map(p  => ({ ...p })),
-    drinks: DEFAULT_PRODUCTS.drinks.map(p => ({ ...p })),
+    tacos:  TACOS.map(p  => ({ ...p })),
+    drinks: BEBIDAS.map(p => ({ ...p })),
   },
   modifiers: DEFAULT_MODIFIERS.map(m => ({ ...m })),
   printer: { ip: '' },
@@ -184,15 +179,6 @@ function accionDigito(digito) {
   }
   saveState();
   renderBorrador();
-  renderCantidad();
-}
-
-function accionAtajo(n) {
-  const mesa = getMesa(state.currentMesa);
-  mesa.borrador.cantDigitos = String(n);
-  saveState();
-  renderBorrador();
-  renderCantidad();
 }
 
 function accionProducto(sku) {
@@ -214,7 +200,6 @@ function accionProducto(sku) {
   b.cantDigitos = '';
   saveState();
   renderBorrador();
-  renderCantidad();
   renderModStates();
 }
 
@@ -251,7 +236,6 @@ function accionBorrar() {
   if (b.cantDigitos.length > 0) {
     b.cantDigitos = b.cantDigitos.slice(0, -1);
     saveState();
-    renderCantidad();
     renderBorrador();
     return;
   }
@@ -306,7 +290,6 @@ function accionSiguientePlato() {
   b.cantDigitos = '';
   saveState();
   renderBorrador();
-  renderCantidad();
   renderModStates();
 }
 
@@ -344,7 +327,6 @@ function accionEnviar() {
   saveState();
   renderHistorial();
   renderBorrador();
-  renderCantidad();
   renderModStates();
   actualizarEnviadasBadge();
 
@@ -434,6 +416,20 @@ function modAriaLabel(mod) {
 }
 
 /* ─── Renderizado: Pantalla Mesas ────────────────────────────── */
+function buildStatusText(mesa) {
+  const hasBorrador = mesa.borrador.platos.some(p => p.items.length > 0 || p.note.trim());
+  const numEnviadas = mesa.historial.length;
+  return {
+    hasBorrador,
+    numEnviadas,
+    statusText: hasBorrador
+      ? 'en construcción'
+      : numEnviadas > 0
+        ? `${numEnviadas} enviada${numEnviadas !== 1 ? 's' : ''}`
+        : '',
+  };
+}
+
 function renderMesas() {
   const grid = document.getElementById('mesa-grid');
   const especiales = document.getElementById('especiales-grid');
@@ -463,14 +459,7 @@ function renderMesas() {
 
 function buildMesaCard(id, label) {
   const mesa = getMesa(id);
-  const hasBorrador = mesa.borrador.platos.some(p => p.items.length > 0 || p.note.trim());
-  const numEnviadas = mesa.historial.length;
-
-  const statusText = hasBorrador
-    ? 'en construcción'
-    : numEnviadas > 0
-      ? `${numEnviadas} enviada${numEnviadas !== 1 ? 's' : ''}`
-      : '';
+  const { hasBorrador, numEnviadas, statusText } = buildStatusText(mesa);
 
   const btn = document.createElement('button');
   btn.className = 'mesa-card';
@@ -488,14 +477,7 @@ function buildMesaCard(id, label) {
 
 function buildEspecialCard(e) {
   const mesa = getMesa(e.id);
-  const hasBorrador = mesa.borrador.platos.some(p => p.items.length > 0 || p.note.trim());
-  const numEnviadas = mesa.historial.length;
-
-  const statusText = hasBorrador
-    ? 'en construcción'
-    : numEnviadas > 0
-      ? `${numEnviadas} enviada${numEnviadas !== 1 ? 's' : ''}`
-      : '';
+  const { hasBorrador, numEnviadas, statusText } = buildStatusText(mesa);
 
   const btn = document.createElement('button');
   btn.className = 'especial-card';
@@ -534,7 +516,6 @@ function abrirMesa(id) {
 
   renderHistorial();
   renderBorrador();
-  renderCantidad();
   renderModStates();
   actualizarEnviadasBadge();
   actualizarBtnNota();
@@ -655,7 +636,8 @@ function guardarConfig() {
   // Products
   ['tacos', 'drinks'].forEach(group => {
     const products = [];
-    for (let i = 0; i < 10; i++) {
+    const slotCount = group === 'tacos' ? TACOS.length : BEBIDAS.length;
+    for (let i = 0; i < slotCount; i++) {
       const skuInput  = document.querySelector(`.config-sku-input[data-group="${group}"][data-idx="${i}"]`);
       const nameInput = document.querySelector(`.config-name-input[data-group="${group}"][data-idx="${i}"]`);
       const toggleBtn = document.querySelector(`.config-product-toggle[data-group="${group}"][data-idx="${i}"]`);
@@ -670,7 +652,7 @@ function guardarConfig() {
 
   // Modifiers
   const modifiers = [];
-  for (let i = 0; i < 7; i++) {
+  for (let i = 0; i < DEFAULT_MODIFIERS.length; i++) {
     const skuInput  = document.querySelector(`.config-sku-input[data-group="modifiers"][data-idx="${i}"]`);
     const nameInput = document.querySelector(`.config-name-input[data-group="modifiers"][data-idx="${i}"]`);
     const toggleBtn = document.querySelector(`.config-product-toggle[data-group="modifiers"][data-idx="${i}"]`);
@@ -844,23 +826,6 @@ function renderBorrador() {
   });
 
   cont.innerHTML = `<div class="borrador-ticket">${lines.join('\n')}</div>`;
-}
-
-/* ─── Renderizado: cantidad ──────────────────────────────────── */
-function renderCantidad() {
-  const display = document.querySelector('.cantidad-display');
-  if (!display) return;
-
-  const mesa = getMesa(state.currentMesa);
-  const b = mesa.borrador;
-
-  if (b.cantDigitos) {
-    display.textContent = b.cantDigitos;
-    display.classList.remove('placeholder');
-  } else {
-    display.textContent = '1';
-    display.classList.add('placeholder');
-  }
 }
 
 /* ─── Renderizado: estado de modificadores ───────────────────── */
@@ -1315,10 +1280,9 @@ function bindEvents() {
       return;
     }
 
-    // Atajos de cantidad
-    const shortcut = e.target.closest('[data-n]');
-    if (shortcut) {
-      accionAtajo(Number(shortcut.dataset.n));
+    // Volver a mesas desde comanda
+    if (e.target.closest('#btn-back')) {
+      volverAMesas();
       return;
     }
 
@@ -1365,13 +1329,6 @@ function bindEvents() {
       cerrarNota();
       actualizarBtnNota();
       return;
-    }
-  });
-
-  // Volver a mesas desde comanda
-  app.addEventListener('click', e => {
-    if (e.target.closest('#btn-back')) {
-      volverAMesas();
     }
   });
 

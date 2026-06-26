@@ -21,3 +21,8 @@ python3 -m http.server
 ## Especificación completa
 
 @docs/spec.md
+
+## Estado por fase
+
+- **Fase 2** (Configuración): completa — ver `docs/fase2.md`.
+- **Fase 3** (Capacitor + impresión térmica): pendiente.

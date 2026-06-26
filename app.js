@@ -564,6 +564,21 @@ function volverAMesas() {
   mostrarScreen('mesas');
 }
 
+function actualizarSlotsConfig(group) {
+  const rows = document.querySelectorAll(`.config-product-row[data-group="${group}"]`);
+  let hayVacioOculto = false;
+
+  rows.forEach(row => {
+    const skuInput = row.querySelector('.config-sku-input');
+    const vacio = !skuInput || !skuInput.value.trim();
+    row.classList.toggle('slot-oculto', vacio);
+    if (vacio) hayVacioOculto = true;
+  });
+
+  const btn = document.querySelector(`.btn-agregar-slot[data-group="${group}"]`);
+  if (btn) btn.style.display = hayVacioOculto ? '' : 'none';
+}
+
 function abrirConfig() {
   // Populate form with current config values
   const waiterInput = document.getElementById('input-waiter-name');
@@ -600,6 +615,8 @@ function abrirConfig() {
       toggleBtn.closest('.config-product-row').classList.toggle('disabled', !enabled);
     }
   });
+
+  ['tacos', 'drinks', 'modifiers'].forEach(actualizarSlotsConfig);
 
   const ipInput = document.getElementById('input-printer-ip');
   if (ipInput) ipInput.value = config.printer.ip;
@@ -1082,7 +1099,7 @@ function buildDOM() {
           <div class="config-subsection-title">Tacos</div>
           <div class="config-product-list">
             ${Array.from({ length: 10 }, (_, i) => `
-              <div class="config-product-row">
+              <div class="config-product-row" data-group="tacos" data-idx="${i}">
                 <button class="config-product-toggle"
                         data-group="tacos" data-idx="${i}"
                         aria-pressed="true"
@@ -1100,11 +1117,12 @@ function buildDOM() {
               </div>
             `).join('')}
           </div>
+          <button class="btn-agregar-slot" data-group="tacos" type="button">+ Agregar</button>
 
           <div class="config-subsection-title config-subsection-title--spaced">Bebidas</div>
           <div class="config-product-list">
             ${Array.from({ length: 10 }, (_, i) => `
-              <div class="config-product-row">
+              <div class="config-product-row" data-group="drinks" data-idx="${i}">
                 <button class="config-product-toggle"
                         data-group="drinks" data-idx="${i}"
                         aria-pressed="true"
@@ -1122,6 +1140,7 @@ function buildDOM() {
               </div>
             `).join('')}
           </div>
+          <button class="btn-agregar-slot" data-group="drinks" type="button">+ Agregar</button>
         </section>
 
         <!-- Sección: Modificadores -->
@@ -1129,7 +1148,7 @@ function buildDOM() {
           <h2 class="config-section-title">Modificadores</h2>
           <div class="config-product-list">
             ${Array.from({ length: 7 }, (_, i) => `
-              <div class="config-product-row">
+              <div class="config-product-row" data-group="modifiers" data-idx="${i}">
                 <button class="config-product-toggle"
                         data-group="modifiers" data-idx="${i}"
                         aria-pressed="true"
@@ -1147,6 +1166,7 @@ function buildDOM() {
               </div>
             `).join('')}
           </div>
+          <button class="btn-agregar-slot" data-group="modifiers" type="button">+ Agregar</button>
         </section>
 
         <!-- Sección: Impresora -->
@@ -1256,6 +1276,24 @@ function bindEvents() {
     // Impresora — probar
     if (e.target.closest('#btn-probar-impresora')) {
       probarImpresora();
+      return;
+    }
+
+    // Revelar siguiente slot vacío en config
+    const agregarBtn = e.target.closest('.btn-agregar-slot');
+    if (agregarBtn) {
+      const group = agregarBtn.dataset.group;
+      const rows = document.querySelectorAll(`.config-product-row[data-group="${group}"]`);
+      for (const row of rows) {
+        if (row.classList.contains('slot-oculto')) {
+          row.classList.remove('slot-oculto');
+          const skuInput = row.querySelector('.config-sku-input');
+          if (skuInput) skuInput.focus();
+          const quedanOcultos = Array.from(rows).some(r => r.classList.contains('slot-oculto'));
+          if (!quedanOcultos) agregarBtn.style.display = 'none';
+          break;
+        }
+      }
       return;
     }
 

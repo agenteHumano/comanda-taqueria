@@ -1232,6 +1232,22 @@ input[type="number"]::-webkit-inner-spin-button { -webkit-appearance: none; }
   color: var(--ink);
 }
 
+/* Slot vacío oculto en configuración */
+.slot-oculto { display: none; }
+
+.btn-agregar-slot {
+  align-self: flex-start;
+  font-size: var(--text-sm);
+  font-weight: 600;
+  color: var(--primary);
+  padding: var(--space-2) var(--space-1);
+  margin-top: var(--space-1);
+  border-radius: var(--radius-sm);
+  transition: opacity var(--dur-fast);
+}
+
+.btn-agregar-slot:active { opacity: 0.55; }
+
 /* Disabled product / modifier key — oculto para que los activos llenen la fila */
 .key-producto.key-disabled,
 .key-mod.key-disabled {

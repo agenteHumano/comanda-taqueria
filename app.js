@@ -49,6 +49,7 @@ const DEFAULT_MODIFIERS = [
 
 let config = {
   waiterName: '',
+  tableCount: 10,
   products: {
     tacos:  DEFAULT_PRODUCTS.tacos.map(p  => ({ ...p })),
     drinks: DEFAULT_PRODUCTS.drinks.map(p => ({ ...p })),
@@ -101,7 +102,9 @@ function loadState() {
 /* ─── Persistencia (config) ──────────────────────────────────── */
 function loadConfig() {
   try {
-    config.waiterName = localStorage.getItem('config.waiterName') || '';
+    config.waiterName  = localStorage.getItem('config.waiterName') || '';
+    const rawCount = parseInt(localStorage.getItem('config.tableCount'), 10);
+    if (rawCount >= 1 && rawCount <= 20) config.tableCount = rawCount;
 
     const rawTacos  = localStorage.getItem('config.products.tacos');
     const rawDrinks = localStorage.getItem('config.products.drinks');
@@ -127,7 +130,8 @@ function loadConfig() {
 
 function saveConfig() {
   try {
-    localStorage.setItem('config.waiterName', config.waiterName);
+    localStorage.setItem('config.waiterName',  config.waiterName);
+    localStorage.setItem('config.tableCount', String(config.tableCount));
     localStorage.setItem('config.products.tacos',  JSON.stringify(config.products.tacos));
     localStorage.setItem('config.products.drinks', JSON.stringify(config.products.drinks));
     localStorage.setItem('config.modifiers',       JSON.stringify(config.modifiers));
@@ -436,7 +440,7 @@ function renderMesas() {
   if (!grid || !especiales) return;
 
   grid.innerHTML = '';
-  for (let i = 1; i <= 10; i++) {
+  for (let i = 1; i <= config.tableCount; i++) {
     grid.appendChild(buildMesaCard(i, String(i)));
   }
 
@@ -445,7 +449,10 @@ function renderMesas() {
     especiales.appendChild(buildEspecialCard(e));
   });
 
-  const allIds = [1,2,3,4,5,6,7,8,9,10, ...ESPECIALES.map(e => e.id)];
+  const allIds = [
+    ...Array.from({ length: config.tableCount }, (_, i) => i + 1),
+    ...ESPECIALES.map(e => e.id),
+  ];
   const activas = allIds.filter(id => {
     const m = getMesa(id);
     return m.historial.length > 0 || m.borrador.platos.some(p => p.items.length > 0 || p.note.trim());
@@ -562,6 +569,9 @@ function abrirConfig() {
   const waiterInput = document.getElementById('input-waiter-name');
   if (waiterInput) waiterInput.value = config.waiterName;
 
+  const tableCountInput = document.getElementById('input-table-count');
+  if (tableCountInput) tableCountInput.value = config.tableCount;
+
   ['tacos', 'drinks'].forEach(group => {
     const products = group === 'tacos' ? config.products.tacos : config.products.drinks;
     products.forEach((p, i) => {
@@ -611,6 +621,19 @@ function guardarConfig() {
   // Waiter name
   const waiterInput = document.getElementById('input-waiter-name');
   config.waiterName = waiterInput ? waiterInput.value.trim() : '';
+
+  // Table count — borrar estado de mesas eliminadas antes de actualizar
+  const tableCountInput = document.getElementById('input-table-count');
+  const newTableCount = tableCountInput
+    ? Math.max(1, Math.min(20, parseInt(tableCountInput.value, 10) || config.tableCount))
+    : config.tableCount;
+  if (newTableCount < config.tableCount) {
+    for (let i = newTableCount + 1; i <= config.tableCount; i++) {
+      state.mesas.delete(i);
+    }
+    saveState();
+  }
+  config.tableCount = newTableCount;
 
   // Products
   ['tacos', 'drinks'].forEach(group => {
@@ -1044,6 +1067,11 @@ function buildDOM() {
             <label class="config-label" for="input-waiter-name">Nombre del mesero</label>
             <input type="text" id="input-waiter-name" class="config-input"
                    placeholder="Sin nombre" maxlength="40" autocomplete="off">
+          </div>
+          <div class="config-field">
+            <label class="config-label" for="input-table-count">Número de mesas</label>
+            <input type="number" id="input-table-count" class="config-input"
+                   min="1" max="20" inputmode="numeric" autocomplete="off">
           </div>
         </section>
 

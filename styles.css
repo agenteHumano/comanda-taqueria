@@ -111,6 +111,10 @@ input {
   color: var(--ink);
 }
 
+input[type="number"] { -moz-appearance: textfield; }
+input[type="number"]::-webkit-outer-spin-button,
+input[type="number"]::-webkit-inner-spin-button { -webkit-appearance: none; }
+
 /* ─── App shell ──────────────────────────────────────────────── */
 
 /* En desktop: centra la app como si fuera un dispositivo mobile */

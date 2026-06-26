@@ -1234,6 +1234,14 @@ input {
   cursor: default;
 }
 
+/* Disabled modifier key */
+.key-mod.key-disabled {
+  background: var(--surface);
+  opacity: 0.15;
+  pointer-events: none;
+  cursor: default;
+}
+
 /* ─── Utility ────────────────────────────────────────────────── */
 .visually-hidden {
   position: absolute;

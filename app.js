@@ -25,8 +25,6 @@ const BEBIDAS = [
   { sku: 'JUG', name: 'Jugo' },
 ];
 
-const MODIFICADORES = ['C/T', 'S/V', 'S/C', 'S/Ci'];
-
 const ESPECIALES = [
   { id: 'PR', label: 'Para recoger', icon: `<svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M6 2 3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4z"/><line x1="3" y1="6" x2="21" y2="6"/><path d="M16 10a4 4 0 0 1-8 0"/></svg>` },
   { id: 'PE', label: 'Para enviar',  icon: `<svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><rect x="1" y="3" width="15" height="13"/><polygon points="16 8 20 8 23 11 23 16 16 16 16 8"/><circle cx="5.5" cy="18.5" r="2.5"/><circle cx="18.5" cy="18.5" r="2.5"/></svg>` },
@@ -39,12 +37,23 @@ const DEFAULT_PRODUCTS = {
   drinks: BEBIDAS.map(p => ({ ...p })),
 };
 
+const DEFAULT_MODIFIERS = [
+  { sku: 'S/V',  name: 'Sin verdura',  enabled: true  },
+  { sku: 'S/C',  name: 'Sin cebolla',  enabled: true  },
+  { sku: 'S/CI', name: 'Sin cilantro', enabled: true  },
+  { sku: '',     name: '',             enabled: false  },
+  { sku: '',     name: '',             enabled: false  },
+  { sku: '',     name: '',             enabled: false  },
+  { sku: '',     name: '',             enabled: false  },
+];
+
 let config = {
   waiterName: '',
   products: {
     tacos:  DEFAULT_PRODUCTS.tacos.map(p  => ({ ...p })),
     drinks: DEFAULT_PRODUCTS.drinks.map(p => ({ ...p })),
   },
+  modifiers: DEFAULT_MODIFIERS.map(m => ({ ...m })),
   printer: { ip: '' },
 };
 
@@ -106,6 +115,12 @@ function loadConfig() {
       if (Array.isArray(parsed) && parsed.length === 10) config.products.drinks = parsed;
     }
 
+    const rawModifiers = localStorage.getItem('config.modifiers');
+    if (rawModifiers) {
+      const parsed = JSON.parse(rawModifiers);
+      if (Array.isArray(parsed) && parsed.length === 7) config.modifiers = parsed;
+    }
+
     config.printer.ip = localStorage.getItem('config.printer.ip') || '';
   } catch (_) {}
 }
@@ -115,6 +130,7 @@ function saveConfig() {
     localStorage.setItem('config.waiterName', config.waiterName);
     localStorage.setItem('config.products.tacos',  JSON.stringify(config.products.tacos));
     localStorage.setItem('config.products.drinks', JSON.stringify(config.products.drinks));
+    localStorage.setItem('config.modifiers',       JSON.stringify(config.modifiers));
     localStorage.setItem('config.printer.ip', config.printer.ip);
   } catch (_) {}
 }
@@ -400,12 +416,16 @@ function renderTicketCocinaHTML(platos) {
 }
 
 function modLabel(mod) {
-  const map = { 'S/V': 'sin verdura', 'S/C': 'sin cebolla', 'S/Ci': 'sin cilantro', 'C/T': 'con todo' };
+  const fromConfig = config.modifiers.find(m => m.sku === mod);
+  if (fromConfig && fromConfig.name) return fromConfig.name.toLowerCase();
+  const map = { 'S/V': 'sin verdura', 'S/C': 'sin cebolla', 'S/Ci': 'sin cilantro', 'S/CI': 'sin cilantro', 'C/T': 'con todo' };
   return map[mod] || mod;
 }
 
 function modAriaLabel(mod) {
-  const map = { 'C/T': 'Con todo (limpiar modificadores)', 'S/V': 'Sin verdura', 'S/C': 'Sin cebolla', 'S/Ci': 'Sin cilantro' };
+  const fromConfig = config.modifiers.find(m => m.sku === mod);
+  if (fromConfig && fromConfig.name) return fromConfig.name;
+  const map = { 'C/T': 'Con todo (limpiar modificadores)', 'S/V': 'Sin verdura', 'S/C': 'Sin cebolla', 'S/Ci': 'Sin cilantro', 'S/CI': 'Sin cilantro' };
   return map[mod] || mod;
 }
 
@@ -558,6 +578,19 @@ function abrirConfig() {
     });
   });
 
+  config.modifiers.forEach((m, i) => {
+    const skuInput  = document.querySelector(`.config-sku-input[data-group="modifiers"][data-idx="${i}"]`);
+    const nameInput = document.querySelector(`.config-name-input[data-group="modifiers"][data-idx="${i}"]`);
+    const toggleBtn = document.querySelector(`.config-product-toggle[data-group="modifiers"][data-idx="${i}"]`);
+    if (skuInput)  skuInput.value  = m.sku;
+    if (nameInput) nameInput.value = m.name;
+    if (toggleBtn) {
+      const enabled = m.enabled !== false;
+      toggleBtn.setAttribute('aria-pressed', String(enabled));
+      toggleBtn.closest('.config-product-row').classList.toggle('disabled', !enabled);
+    }
+  });
+
   const ipInput = document.getElementById('input-printer-ip');
   if (ipInput) ipInput.value = config.printer.ip;
 
@@ -595,12 +628,26 @@ function guardarConfig() {
     else                   config.products.drinks = products;
   });
 
+  // Modifiers
+  const modifiers = [];
+  for (let i = 0; i < 7; i++) {
+    const skuInput  = document.querySelector(`.config-sku-input[data-group="modifiers"][data-idx="${i}"]`);
+    const nameInput = document.querySelector(`.config-name-input[data-group="modifiers"][data-idx="${i}"]`);
+    const toggleBtn = document.querySelector(`.config-product-toggle[data-group="modifiers"][data-idx="${i}"]`);
+    const sku     = skuInput  ? skuInput.value.trim().toUpperCase().slice(0, 4) : '';
+    const name    = nameInput ? nameInput.value.trim() : '';
+    const enabled = toggleBtn ? toggleBtn.getAttribute('aria-pressed') !== 'false' : true;
+    modifiers.push({ sku, name, enabled });
+  }
+  config.modifiers = modifiers;
+
   // Printer IP
   const ipInput = document.getElementById('input-printer-ip');
   config.printer.ip = ipInput ? ipInput.value.trim() : '';
 
   saveConfig();
   renderKeyboardRows();
+  renderModifierRow();
   volverDeConfig();
   showToast('Configuración guardada');
 }
@@ -820,6 +867,31 @@ function actualizarBtnNota() {
     : 'Nota';
 }
 
+/* ─── Renderizado: teclado de modificadores ──────────────────── */
+function keyModHTML(m) {
+  if (!m.sku || m.enabled === false) {
+    return `<button class="key-mod key-disabled" disabled aria-hidden="true"></button>`;
+  }
+  const sku = escapeHtml(m.sku);
+  return `<button class="key-mod" data-mod="${sku}" aria-label="${escapeHtml(modAriaLabel(m.sku))}">${sku}</button>`;
+}
+
+function renderModifierRow() {
+  const row = document.querySelector('.mods-nota-row');
+  if (!row) return;
+
+  const notaBtn = row.querySelector('.btn-nota');
+  row.querySelectorAll('.key-mod').forEach(b => b.remove());
+
+  const fragment = document.createDocumentFragment();
+  config.modifiers.forEach(m => {
+    const tmp = document.createElement('div');
+    tmp.innerHTML = keyModHTML(m);
+    fragment.appendChild(tmp.firstChild);
+  });
+  row.insertBefore(fragment, notaBtn);
+}
+
 /* ─── Renderizado: teclado de productos ──────────────────────── */
 function keyProductoHTML(p) {
   if (!p.sku || p.enabled === false) {
@@ -907,11 +979,8 @@ function buildDOM() {
           <span class="nota-counter" aria-live="polite"></span>
         </div>
 
-        <!-- Modificadores + Nota -->
+        <!-- Modificadores + Nota (poblado por renderModifierRow()) -->
         <div class="key-row mods-nota-row">
-          ${MODIFICADORES.map(m =>
-            `<button class="key-mod" data-mod="${m}" aria-label="${modAriaLabel(m)}">${m}</button>`
-          ).join('')}
           <button class="btn-nota">
             <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24"
                  fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -1022,6 +1091,31 @@ function buildDOM() {
                        data-group="drinks" data-idx="${i}"
                        placeholder="Nombre completo" autocomplete="off"
                        aria-label="Nombre bebida ${i + 1}">
+              </div>
+            `).join('')}
+          </div>
+        </section>
+
+        <!-- Sección: Modificadores -->
+        <section class="config-section">
+          <h2 class="config-section-title">Modificadores</h2>
+          <div class="config-product-list">
+            ${Array.from({ length: 7 }, (_, i) => `
+              <div class="config-product-row">
+                <button class="config-product-toggle"
+                        data-group="modifiers" data-idx="${i}"
+                        aria-pressed="true"
+                        aria-label="Activar modificador ${i + 1}">
+                  <span class="toggle-pill" aria-hidden="true"></span>
+                </button>
+                <input type="text" class="config-sku-input"
+                       data-group="modifiers" data-idx="${i}"
+                       maxlength="4" placeholder="—" autocomplete="off"
+                       aria-label="Abreviatura modificador ${i + 1}">
+                <input type="text" class="config-name-input"
+                       data-group="modifiers" data-idx="${i}"
+                       placeholder="Nombre completo" autocomplete="off"
+                       aria-label="Nombre modificador ${i + 1}">
               </div>
             `).join('')}
           </div>
@@ -1274,6 +1368,7 @@ function init() {
   loadState();
   buildDOM();
   renderKeyboardRows();
+  renderModifierRow();
   bindEvents();
   renderMesas();
 }

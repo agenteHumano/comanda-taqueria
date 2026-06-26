@@ -25,8 +25,6 @@ const BEBIDAS = [
   { sku: 'JUG', name: 'Jugo' },
 ];
 
-const PRODUCTOS = [...TACOS, ...BEBIDAS];
-
 const MODIFICADORES = ['C/T', 'S/V', 'S/C', 'S/Ci'];
 
 const ESPECIALES = [
@@ -34,6 +32,21 @@ const ESPECIALES = [
   { id: 'PE', label: 'Para enviar',  icon: `<svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><rect x="1" y="3" width="15" height="13"/><polygon points="16 8 20 8 23 11 23 16 16 16 16 8"/><circle cx="5.5" cy="18.5" r="2.5"/><circle cx="18.5" cy="18.5" r="2.5"/></svg>` },
   { id: 'PA_ASIGNAR', label: 'Por asignar', icon: `<svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>` },
 ];
+
+/* ─── Configuración ──────────────────────────────────────────── */
+const DEFAULT_PRODUCTS = {
+  tacos:  TACOS.map(p  => ({ ...p })),
+  drinks: BEBIDAS.map(p => ({ ...p })),
+};
+
+let config = {
+  waiterName: '',
+  products: {
+    tacos:  DEFAULT_PRODUCTS.tacos.map(p  => ({ ...p })),
+    drinks: DEFAULT_PRODUCTS.drinks.map(p => ({ ...p })),
+  },
+  printer: { ip: '' },
+};
 
 /* ─── Estado ─────────────────────────────────────────────────── */
 /*
@@ -55,7 +68,7 @@ let state = {
   mesas: new Map(),
 };
 
-/* ─── Persistencia ───────────────────────────────────────────── */
+/* ─── Persistencia (state) ───────────────────────────────────── */
 function saveState() {
   try {
     const serializable = {
@@ -73,6 +86,36 @@ function loadState() {
     if (parsed.mesas) {
       state.mesas = new Map(parsed.mesas);
     }
+  } catch (_) {}
+}
+
+/* ─── Persistencia (config) ──────────────────────────────────── */
+function loadConfig() {
+  try {
+    config.waiterName = localStorage.getItem('config.waiterName') || '';
+
+    const rawTacos  = localStorage.getItem('config.products.tacos');
+    const rawDrinks = localStorage.getItem('config.products.drinks');
+
+    if (rawTacos) {
+      const parsed = JSON.parse(rawTacos);
+      if (Array.isArray(parsed) && parsed.length === 10) config.products.tacos = parsed;
+    }
+    if (rawDrinks) {
+      const parsed = JSON.parse(rawDrinks);
+      if (Array.isArray(parsed) && parsed.length === 10) config.products.drinks = parsed;
+    }
+
+    config.printer.ip = localStorage.getItem('config.printer.ip') || '';
+  } catch (_) {}
+}
+
+function saveConfig() {
+  try {
+    localStorage.setItem('config.waiterName', config.waiterName);
+    localStorage.setItem('config.products.tacos',  JSON.stringify(config.products.tacos));
+    localStorage.setItem('config.products.drinks', JSON.stringify(config.products.drinks));
+    localStorage.setItem('config.printer.ip', config.printer.ip);
   } catch (_) {}
 }
 
@@ -104,6 +147,14 @@ function getCantidad(borrador) {
   return borrador.cantDigitos ? parseInt(borrador.cantDigitos, 10) : 1;
 }
 
+/* ─── Helpers de catálogo ────────────────────────────────────── */
+function findProducto(sku) {
+  const all = [...config.products.tacos, ...config.products.drinks];
+  const p = all.find(item => item.sku === sku);
+  if (!p) return null;
+  return { sku: p.sku, name: p.name || p.sku };
+}
+
 /* ─── Lógica de teclado ──────────────────────────────────────── */
 function accionDigito(digito) {
   const mesa = getMesa(state.currentMesa);
@@ -129,7 +180,8 @@ function accionProducto(sku) {
   const b = mesa.borrador;
   const cant = getCantidad(b);
   const plato = platoActivo(b);
-  const producto = PRODUCTOS.find(p => p.sku === sku);
+  const producto = findProducto(sku);
+  if (!producto) return;
 
   const existente = plato.items.find(i => i.sku === sku);
   if (existente) {
@@ -197,7 +249,6 @@ function accionBorrar() {
     saveState();
     renderBorrador();
     renderModStates();
-    // Flash sutil en el borrador para confirmar la eliminación
     const borradorEl = document.querySelector('.borrador-section');
     if (borradorEl) {
       borradorEl.style.transition = 'background 80ms';
@@ -228,7 +279,7 @@ function accionSiguientePlato() {
   const b = mesa.borrador;
   const plato = platoActivo(b);
 
-  if (plato.items.length === 0) return; // sin efecto si plato vacío
+  if (plato.items.length === 0) return;
 
   b.platos.push({ items: [], note: '' });
   b.lastSku = null;
@@ -243,14 +294,12 @@ function accionEnviar() {
   const mesa = getMesa(state.currentMesa);
   const b = mesa.borrador;
 
-  // Si la nota estaba abierta, guardarla antes de enviar
   if (b.notaEditando) {
     const input = document.querySelector('.nota-input');
     if (input) platoActivo(b).note = input.value.trim();
     b.notaEditando = false;
   }
 
-  // Filtrar platos sin items ni nota
   const platos = b.platos.filter(p => p.items.length > 0 || p.note.trim());
   if (platos.length === 0) return;
 
@@ -268,10 +317,8 @@ function accionEnviar() {
   mesa.historial.push(comanda);
   mesa.borrador = freshBorrador();
 
-  // Exponer objeto estructurado para integración futura
   console.log('[comanda-taqueria] nueva comanda:', JSON.stringify(comanda, null, 2));
 
-  // Feedback háptico al enviar (si el dispositivo lo soporta)
   if (navigator.vibrate) navigator.vibrate(60);
 
   saveState();
@@ -281,7 +328,6 @@ function accionEnviar() {
   renderModStates();
   actualizarEnviadasBadge();
 
-  // Scroll historial al fondo
   const hist = document.querySelector('.comanda-historial');
   if (hist) hist.scrollTop = hist.scrollHeight;
 }
@@ -379,7 +425,6 @@ function renderMesas() {
     especiales.appendChild(buildEspecialCard(e));
   });
 
-  // Contador de mesas activas en el header
   const allIds = [1,2,3,4,5,6,7,8,9,10, ...ESPECIALES.map(e => e.id)];
   const activas = allIds.filter(id => {
     const m = getMesa(id);
@@ -446,15 +491,18 @@ function buildEspecialCard(e) {
 function abrirMesa(id) {
   state.currentMesa = id;
 
-  // Título del header
   const title = document.getElementById('comanda-title');
   if (title) {
+    let baseTitle;
     if (typeof id === 'number') {
-      title.textContent = `Mesa ${id}`;
+      baseTitle = `Mesa ${id}`;
     } else {
       const especial = ESPECIALES.find(e => e.id === id);
-      title.textContent = especial ? especial.label : id;
+      baseTitle = especial ? especial.label : id;
     }
+    title.textContent = config.waiterName
+      ? `${baseTitle} · ${config.waiterName}`
+      : baseTitle;
   }
 
   renderHistorial();
@@ -464,7 +512,6 @@ function abrirMesa(id) {
   actualizarEnviadasBadge();
   actualizarBtnNota();
 
-  // Scroll historial al fondo
   setTimeout(() => {
     const hist = document.querySelector('.comanda-historial');
     if (hist) hist.scrollTop = hist.scrollHeight;
@@ -477,7 +524,6 @@ function volverAMesas() {
   const mesa = state.currentMesa ? getMesa(state.currentMesa) : null;
   if (mesa && mesa.borrador.notaEditando) cerrarNota();
 
-  // Avisar que el borrador persiste si hay algo capturado
   const tieneBorrador = mesa && mesa.borrador.platos.some(p => p.items.length > 0 || p.note.trim());
   if (tieneBorrador) {
     const label = typeof state.currentMesa === 'number'
@@ -489,6 +535,110 @@ function volverAMesas() {
   state.currentMesa = null;
   renderMesas();
   mostrarScreen('mesas');
+}
+
+function abrirConfig() {
+  // Populate form with current config values
+  const waiterInput = document.getElementById('input-waiter-name');
+  if (waiterInput) waiterInput.value = config.waiterName;
+
+  ['tacos', 'drinks'].forEach(group => {
+    const products = group === 'tacos' ? config.products.tacos : config.products.drinks;
+    products.forEach((p, i) => {
+      const skuInput  = document.querySelector(`.config-sku-input[data-group="${group}"][data-idx="${i}"]`);
+      const nameInput = document.querySelector(`.config-name-input[data-group="${group}"][data-idx="${i}"]`);
+      if (skuInput)  skuInput.value  = p.sku;
+      if (nameInput) nameInput.value = p.name;
+    });
+  });
+
+  const ipInput = document.getElementById('input-printer-ip');
+  if (ipInput) ipInput.value = config.printer.ip;
+
+  // Clear previous search result
+  const resultEl = document.getElementById('config-printer-result');
+  if (resultEl) resultEl.innerHTML = '';
+
+  actualizarPrinterStatus();
+  mostrarScreen('config');
+}
+
+function volverDeConfig() {
+  renderMesas();
+  mostrarScreen('mesas');
+}
+
+function guardarConfig() {
+  // Waiter name
+  const waiterInput = document.getElementById('input-waiter-name');
+  config.waiterName = waiterInput ? waiterInput.value.trim() : '';
+
+  // Products
+  ['tacos', 'drinks'].forEach(group => {
+    const products = [];
+    for (let i = 0; i < 10; i++) {
+      const skuInput  = document.querySelector(`.config-sku-input[data-group="${group}"][data-idx="${i}"]`);
+      const nameInput = document.querySelector(`.config-name-input[data-group="${group}"][data-idx="${i}"]`);
+      const sku  = skuInput  ? skuInput.value.trim().toUpperCase().slice(0, 4) : '';
+      const name = nameInput ? nameInput.value.trim() : '';
+      products.push({ sku, name: name || sku });
+    }
+    if (group === 'tacos') config.products.tacos  = products;
+    else                   config.products.drinks = products;
+  });
+
+  // Printer IP
+  const ipInput = document.getElementById('input-printer-ip');
+  config.printer.ip = ipInput ? ipInput.value.trim() : '';
+
+  saveConfig();
+  renderKeyboardRows();
+  volverDeConfig();
+  showToast('Configuración guardada');
+}
+
+function actualizarPrinterStatus() {
+  const statusEl  = document.getElementById('config-printer-status');
+  const probarBtn = document.getElementById('btn-probar-impresora');
+  if (!statusEl) return;
+
+  if (config.printer.ip) {
+    statusEl.textContent = `Impresora: ${config.printer.ip}`;
+    statusEl.classList.remove('empty');
+    if (probarBtn) probarBtn.classList.remove('hidden');
+  } else {
+    statusEl.textContent = 'Sin impresora configurada';
+    statusEl.classList.add('empty');
+    if (probarBtn) probarBtn.classList.add('hidden');
+  }
+}
+
+function buscarImpresora() {
+  const btn    = document.getElementById('btn-buscar-impresora');
+  const result = document.getElementById('config-printer-result');
+  if (!result) return;
+
+  btn.disabled = true;
+  result.innerHTML = `<div class="printer-spinner"><span class="spinner"></span> Buscando impresora…</div>`;
+
+  setTimeout(() => {
+    btn.disabled = false;
+    result.innerHTML = `<div class="printer-result-msg">La búsqueda automática estará disponible cuando instales la app. Ingresa la IP manualmente.</div>`;
+  }, 1500);
+}
+
+function probarImpresora() {
+  const ipInput = document.getElementById('input-printer-ip');
+  const ip      = ipInput ? ipInput.value.trim() : config.printer.ip;
+  const result  = document.getElementById('config-printer-result');
+
+  const ipRegex = /^(\d{1,3}\.){3}\d{1,3}$/;
+  if (!ip || !ipRegex.test(ip)) {
+    if (result) result.innerHTML = `<div class="printer-result-msg error">IP inválida. Formato esperado: 192.168.1.42</div>`;
+    return;
+  }
+
+  if (result) result.innerHTML = `<div class="printer-result-msg">La prueba de impresión real estará disponible cuando instales la app. IP: ${escapeHtml(ip)}</div>`;
 }
 
 function mostrarScreen(nombre) {
@@ -535,7 +685,7 @@ function renderHistorial() {
       <div class="cocina-view">${cocinaHTML}</div>
     `;
 
-    const btnExp = burbuja.querySelector('.btn-expand');
+    const btnExp    = burbuja.querySelector('.btn-expand');
     const cocinaView = burbuja.querySelector('.cocina-view');
     btnExp.addEventListener('click', () => {
       const open = btnExp.dataset.open === 'true';
@@ -662,6 +812,25 @@ function actualizarBtnNota() {
     : 'Nota';
 }
 
+/* ─── Renderizado: teclado de productos ──────────────────────── */
+function keyProductoHTML(p) {
+  if (!p.sku) {
+    return `<button class="key-producto key-disabled" disabled aria-hidden="true"></button>`;
+  }
+  const sku  = escapeHtml(p.sku);
+  const name = escapeHtml(p.name || p.sku);
+  return `<button class="key-producto" data-sku="${sku}" aria-label="${name}" title="${name}">${sku}</button>`;
+}
+
+function renderKeyboardRows() {
+  const tacosRow   = document.getElementById('key-row-tacos');
+  const bebidasRow = document.getElementById('key-row-bebidas');
+  if (!tacosRow || !bebidasRow) return;
+
+  tacosRow.innerHTML   = config.products.tacos.map(p  => keyProductoHTML(p)).join('');
+  bebidasRow.innerHTML = config.products.drinks.map(p => keyProductoHTML(p)).join('');
+}
+
 /* ─── Construcción del DOM ───────────────────────────────────── */
 function buildDOM() {
   const app = document.getElementById('app');
@@ -670,6 +839,12 @@ function buildDOM() {
     <div id="screen-mesas" class="screen mesas-screen active">
       <div class="mesas-header">
         <h1>Comanda <span class="mesas-activas-badge" id="mesas-activas-badge"></span></h1>
+        <button class="btn-config" id="btn-config" aria-label="Configuración">
+          <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
+            <circle cx="12" cy="12" r="3"/>
+            <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/>
+          </svg>
+        </button>
       </div>
       <div class="mesa-grid" id="mesa-grid"></div>
       <div class="especiales-section">
@@ -709,19 +884,11 @@ function buildDOM() {
           ).join('')}
         </div>
 
-        <!-- Tacos -->
-        <div class="key-row">
-          ${TACOS.map(p =>
-            `<button class="key-producto" data-sku="${p.sku}" aria-label="${p.name}" title="${p.name}">${p.sku}</button>`
-          ).join('')}
-        </div>
+        <!-- Tacos (poblado por renderKeyboardRows()) -->
+        <div class="key-row" id="key-row-tacos"></div>
 
-        <!-- Bebidas -->
-        <div class="key-row">
-          ${BEBIDAS.map(p =>
-            `<button class="key-producto" data-sku="${p.sku}" aria-label="${p.name}" title="${p.name}">${p.sku}</button>`
-          ).join('')}
-        </div>
+        <!-- Bebidas (poblado por renderKeyboardRows()) -->
+        <div class="key-row" id="key-row-bebidas"></div>
 
         <!-- Nota input (visible al editar) -->
         <div class="nota-input-wrapper">
@@ -777,6 +944,104 @@ function buildDOM() {
       </div><!-- /.teclado -->
 
     </div><!-- /#screen-comanda -->
+
+    <!-- Pantalla Configuración -->
+    <div id="screen-config" class="screen config-screen">
+
+      <header class="config-header">
+        <button class="btn-back" id="btn-config-back" aria-label="Volver sin guardar">
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none"
+               stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+            <polyline points="15 18 9 12 15 6"/>
+          </svg>
+        </button>
+        <span class="config-title">Configuración</span>
+      </header>
+
+      <div class="config-body">
+
+        <!-- Sección: Mesero -->
+        <section class="config-section">
+          <h2 class="config-section-title">Mesero</h2>
+          <div class="config-field">
+            <label class="config-label" for="input-waiter-name">Nombre del mesero</label>
+            <input type="text" id="input-waiter-name" class="config-input"
+                   placeholder="Sin nombre" maxlength="40" autocomplete="off">
+          </div>
+        </section>
+
+        <!-- Sección: Productos -->
+        <section class="config-section">
+          <h2 class="config-section-title">Productos</h2>
+
+          <div class="config-subsection-title">Tacos</div>
+          <div class="config-product-list">
+            ${Array.from({ length: 10 }, (_, i) => `
+              <div class="config-product-row">
+                <input type="text" class="config-sku-input"
+                       data-group="tacos" data-idx="${i}"
+                       maxlength="4" placeholder="—" autocomplete="off"
+                       aria-label="Abreviatura taco ${i + 1}">
+                <input type="text" class="config-name-input"
+                       data-group="tacos" data-idx="${i}"
+                       placeholder="Nombre completo" autocomplete="off"
+                       aria-label="Nombre taco ${i + 1}">
+              </div>
+            `).join('')}
+          </div>
+
+          <div class="config-subsection-title config-subsection-title--spaced">Bebidas</div>
+          <div class="config-product-list">
+            ${Array.from({ length: 10 }, (_, i) => `
+              <div class="config-product-row">
+                <input type="text" class="config-sku-input"
+                       data-group="drinks" data-idx="${i}"
+                       maxlength="4" placeholder="—" autocomplete="off"
+                       aria-label="Abreviatura bebida ${i + 1}">
+                <input type="text" class="config-name-input"
+                       data-group="drinks" data-idx="${i}"
+                       placeholder="Nombre completo" autocomplete="off"
+                       aria-label="Nombre bebida ${i + 1}">
+              </div>
+            `).join('')}
+          </div>
+        </section>
+
+        <!-- Sección: Impresora -->
+        <section class="config-section">
+          <h2 class="config-section-title">Impresora</h2>
+          <div class="config-printer-status empty" id="config-printer-status">Sin impresora configurada</div>
+
+          <button class="btn-buscar-impresora" id="btn-buscar-impresora" type="button">
+            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24"
+                 fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
+            </svg>
+            Buscar en mi red
+          </button>
+
+          <div class="config-printer-result" id="config-printer-result"></div>
+
+          <div class="config-field">
+            <label class="config-label" for="input-printer-ip">IP manual</label>
+            <input type="text" id="input-printer-ip" class="config-input"
+                   placeholder="192.168.1.42" maxlength="15"
+                   inputmode="decimal" autocomplete="off">
+          </div>
+
+          <button class="btn-probar-impresora hidden" id="btn-probar-impresora" type="button">
+            Probar conexión
+          </button>
+        </section>
+
+        <!-- Guardar -->
+        <div class="config-footer">
+          <button class="btn-guardar-config" id="btn-guardar-config" type="button">Guardar</button>
+        </div>
+
+      </div><!-- /.config-body -->
+
+    </div><!-- /#screen-config -->
   `;
 }
 
@@ -807,7 +1072,7 @@ function bindEvents() {
     const modBtn  = e.target.closest('[data-mod]');
     if (prodBtn) {
       longPressTimer = setTimeout(() => {
-        const producto = PRODUCTOS.find(p => p.sku === prodBtn.dataset.sku);
+        const producto = findProducto(prodBtn.dataset.sku);
         if (producto) showToast(producto.name);
       }, 500);
     } else if (modBtn) {
@@ -816,14 +1081,43 @@ function bindEvents() {
       }, 500);
     }
   }, { passive: true });
-  app.addEventListener('touchend', () => clearTimeout(longPressTimer));
+  app.addEventListener('touchend',  () => clearTimeout(longPressTimer));
   app.addEventListener('touchmove', () => clearTimeout(longPressTimer));
 
-  // Delegación de eventos para el teclado
+  // Delegación de eventos principal
   app.addEventListener('click', e => {
-    if (state.currentMesa === null) return;
 
-    const mesa = getMesa(state.currentMesa);
+    // Configuración — abrir
+    if (e.target.closest('#btn-config')) {
+      abrirConfig();
+      return;
+    }
+
+    // Configuración — volver sin guardar
+    if (e.target.closest('#btn-config-back')) {
+      volverDeConfig();
+      return;
+    }
+
+    // Configuración — guardar
+    if (e.target.closest('#btn-guardar-config')) {
+      guardarConfig();
+      return;
+    }
+
+    // Impresora — buscar
+    if (e.target.closest('#btn-buscar-impresora')) {
+      buscarImpresora();
+      return;
+    }
+
+    // Impresora — probar
+    if (e.target.closest('#btn-probar-impresora')) {
+      probarImpresora();
+      return;
+    }
+
+    if (state.currentMesa === null) return;
 
     // Dígitos
     const digitBtn = e.target.closest('[data-digit]');
@@ -885,7 +1179,7 @@ function bindEvents() {
     }
   });
 
-  // Volver a mesas
+  // Volver a mesas desde comanda
   app.addEventListener('click', e => {
     if (e.target.closest('#btn-back')) {
       volverAMesas();
@@ -905,17 +1199,25 @@ function bindEvents() {
 
   // Contador de caracteres en nota
   app.addEventListener('input', e => {
-    if (!e.target.classList.contains('nota-input')) return;
-    const remaining = 120 - e.target.value.length;
-    const counter = document.querySelector('.nota-counter');
-    if (!counter) return;
-    if (remaining <= 40) {
-      counter.textContent = `${remaining}`;
-      counter.classList.add('visible');
-      counter.classList.toggle('warning', remaining <= 15);
-    } else {
-      counter.textContent = '';
-      counter.classList.remove('visible', 'warning');
+    if (e.target.classList.contains('nota-input')) {
+      const remaining = 120 - e.target.value.length;
+      const counter = document.querySelector('.nota-counter');
+      if (!counter) return;
+      if (remaining <= 40) {
+        counter.textContent = `${remaining}`;
+        counter.classList.add('visible');
+        counter.classList.toggle('warning', remaining <= 15);
+      } else {
+        counter.textContent = '';
+        counter.classList.remove('visible', 'warning');
+      }
+    }
+
+    // Forzar mayúsculas en campos SKU
+    if (e.target.classList.contains('config-sku-input')) {
+      const pos = e.target.selectionStart;
+      e.target.value = e.target.value.toUpperCase();
+      e.target.setSelectionRange(pos, pos);
     }
   });
 
@@ -939,8 +1241,10 @@ function escapeHtml(str) {
 
 /* ─── Init ───────────────────────────────────────────────────── */
 function init() {
+  loadConfig();
   loadState();
   buildDOM();
+  renderKeyboardRows();
   bindEvents();
   renderMesas();
 }

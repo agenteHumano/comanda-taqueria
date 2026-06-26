@@ -545,10 +545,16 @@ function abrirConfig() {
   ['tacos', 'drinks'].forEach(group => {
     const products = group === 'tacos' ? config.products.tacos : config.products.drinks;
     products.forEach((p, i) => {
-      const skuInput  = document.querySelector(`.config-sku-input[data-group="${group}"][data-idx="${i}"]`);
-      const nameInput = document.querySelector(`.config-name-input[data-group="${group}"][data-idx="${i}"]`);
+      const skuInput    = document.querySelector(`.config-sku-input[data-group="${group}"][data-idx="${i}"]`);
+      const nameInput   = document.querySelector(`.config-name-input[data-group="${group}"][data-idx="${i}"]`);
+      const toggleBtn   = document.querySelector(`.config-product-toggle[data-group="${group}"][data-idx="${i}"]`);
       if (skuInput)  skuInput.value  = p.sku;
       if (nameInput) nameInput.value = p.name;
+      if (toggleBtn) {
+        const enabled = p.enabled !== false;
+        toggleBtn.setAttribute('aria-pressed', String(enabled));
+        toggleBtn.closest('.config-product-row').classList.toggle('disabled', !enabled);
+      }
     });
   });
 
@@ -579,9 +585,11 @@ function guardarConfig() {
     for (let i = 0; i < 10; i++) {
       const skuInput  = document.querySelector(`.config-sku-input[data-group="${group}"][data-idx="${i}"]`);
       const nameInput = document.querySelector(`.config-name-input[data-group="${group}"][data-idx="${i}"]`);
-      const sku  = skuInput  ? skuInput.value.trim().toUpperCase().slice(0, 4) : '';
-      const name = nameInput ? nameInput.value.trim() : '';
-      products.push({ sku, name: name || sku });
+      const toggleBtn = document.querySelector(`.config-product-toggle[data-group="${group}"][data-idx="${i}"]`);
+      const sku     = skuInput  ? skuInput.value.trim().toUpperCase().slice(0, 4) : '';
+      const name    = nameInput ? nameInput.value.trim() : '';
+      const enabled = toggleBtn ? toggleBtn.getAttribute('aria-pressed') !== 'false' : true;
+      products.push({ sku, name: name || sku, enabled });
     }
     if (group === 'tacos') config.products.tacos  = products;
     else                   config.products.drinks = products;
@@ -814,7 +822,7 @@ function actualizarBtnNota() {
 
 /* ─── Renderizado: teclado de productos ──────────────────────── */
 function keyProductoHTML(p) {
-  if (!p.sku) {
+  if (!p.sku || p.enabled === false) {
     return `<button class="key-producto key-disabled" disabled aria-hidden="true"></button>`;
   }
   const sku  = escapeHtml(p.sku);
@@ -978,6 +986,12 @@ function buildDOM() {
           <div class="config-product-list">
             ${Array.from({ length: 10 }, (_, i) => `
               <div class="config-product-row">
+                <button class="config-product-toggle"
+                        data-group="tacos" data-idx="${i}"
+                        aria-pressed="true"
+                        aria-label="Activar taco ${i + 1}">
+                  <span class="toggle-pill" aria-hidden="true"></span>
+                </button>
                 <input type="text" class="config-sku-input"
                        data-group="tacos" data-idx="${i}"
                        maxlength="4" placeholder="—" autocomplete="off"
@@ -994,6 +1008,12 @@ function buildDOM() {
           <div class="config-product-list">
             ${Array.from({ length: 10 }, (_, i) => `
               <div class="config-product-row">
+                <button class="config-product-toggle"
+                        data-group="drinks" data-idx="${i}"
+                        aria-pressed="true"
+                        aria-label="Activar bebida ${i + 1}">
+                  <span class="toggle-pill" aria-hidden="true"></span>
+                </button>
                 <input type="text" class="config-sku-input"
                        data-group="drinks" data-idx="${i}"
                        maxlength="4" placeholder="—" autocomplete="off"
@@ -1114,6 +1134,15 @@ function bindEvents() {
     // Impresora — probar
     if (e.target.closest('#btn-probar-impresora')) {
       probarImpresora();
+      return;
+    }
+
+    // Toggle de producto en config
+    const toggleBtn = e.target.closest('.config-product-toggle');
+    if (toggleBtn) {
+      const pressed = toggleBtn.getAttribute('aria-pressed') === 'true';
+      toggleBtn.setAttribute('aria-pressed', String(!pressed));
+      toggleBtn.closest('.config-product-row').classList.toggle('disabled', pressed);
       return;
     }
 

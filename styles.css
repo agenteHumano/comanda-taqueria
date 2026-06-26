@@ -1008,6 +1008,52 @@ input {
   align-items: center;
 }
 
+.config-product-toggle {
+  width: 44px;
+  height: 44px;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.config-product-toggle .toggle-pill {
+  width: 36px;
+  height: 20px;
+  background: var(--surface-3);
+  border-radius: 10px;
+  position: relative;
+  transition: background var(--dur-fast) var(--ease-out-quart);
+}
+
+.config-product-toggle[aria-pressed="true"] .toggle-pill {
+  background: var(--primary);
+}
+
+.config-product-toggle .toggle-pill::after {
+  content: '';
+  position: absolute;
+  width: 14px;
+  height: 14px;
+  background: var(--ink-muted);
+  border-radius: 50%;
+  top: 3px;
+  left: 3px;
+  transition:
+    transform  var(--dur-fast) var(--ease-out-quart),
+    background var(--dur-fast) var(--ease-out-quart);
+}
+
+.config-product-toggle[aria-pressed="true"] .toggle-pill::after {
+  transform: translateX(16px);
+  background: var(--primary-fg);
+}
+
+.config-product-row.disabled .config-sku-input,
+.config-product-row.disabled .config-name-input {
+  opacity: 0.35;
+}
+
 .config-sku-input {
   width: 64px;
   flex-shrink: 0;

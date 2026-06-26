@@ -1226,20 +1226,10 @@ input {
   color: var(--ink);
 }
 
-/* Disabled product key */
-.key-producto.key-disabled {
-  background: var(--surface);
-  opacity: 0.22;
-  pointer-events: none;
-  cursor: default;
-}
-
-/* Disabled modifier key */
+/* Disabled product / modifier key — oculto para que los activos llenen la fila */
+.key-producto.key-disabled,
 .key-mod.key-disabled {
-  background: var(--surface);
-  opacity: 0.15;
-  pointer-events: none;
-  cursor: default;
+  display: none;
 }
 
 /* ─── Utility ────────────────────────────────────────────────── */

@@ -1,0 +1,8 @@
+{
+  "appId": "mx.comanda.taqueria",
+  "appName": "Comanda Taquería",
+  "webDir": "www",
+  "server": {
+    "androidScheme": "https"
+  }
+}

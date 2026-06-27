@@ -53,6 +53,8 @@ let config = {
   printer: { ip: '' },
 };
 
+const isNative = window.Capacitor?.isNativePlatform?.() ?? false;
+
 /* ─── Estado ─────────────────────────────────────────────────── */
 /*
   state.mesas: Map<id, MesaState>
@@ -415,6 +417,97 @@ function modAriaLabel(mod) {
   return map[mod] || mod;
 }
 
+/* ─── Impresión ESC/POS ──────────────────────────────────────── */
+function uint8ArrayToBase64(bytes) {
+  let binary = '';
+  for (let i = 0; i < bytes.length; i++) binary += String.fromCharCode(bytes[i]);
+  return btoa(binary);
+}
+
+function formatTicket(comanda) {
+  const WIDTH = 48;
+  const enc   = new TextEncoder();
+  const ESC   = 0x1B;
+  const GS    = 0x1D;
+  const CMD   = {
+    INIT:     [ESC, 0x40],
+    BOLD_ON:  [ESC, 0x45, 0x01],
+    BOLD_OFF: [ESC, 0x45, 0x00],
+    CENTER:   [ESC, 0x61, 0x01],
+    LEFT:     [ESC, 0x61, 0x00],
+    LF:       [0x0A],
+    CUT:      [GS, 0x56, 0x42, 0x00],
+  };
+
+  const parts = [];
+  const cmd  = (c)   => parts.push(c);
+  const line = (str) => parts.push(Array.from(enc.encode(str)), CMD.LF);
+
+  cmd(CMD.INIT);
+  cmd(CMD.CENTER);
+  line('='.repeat(WIDTH));
+  cmd(CMD.BOLD_ON);
+  const label = typeof comanda.table === 'number' ? `MESA ${comanda.table}`
+    : comanda.table === 'PR' ? 'PARA RECOGER'
+    : comanda.table === 'PE' ? 'PARA ENVIAR'
+    : 'POR ASIGNAR';
+  line(label);
+  cmd(CMD.BOLD_OFF);
+  if (config.waiterName) line(config.waiterName);
+  line(comanda.sentAt);
+  line('='.repeat(WIDTH));
+
+  cmd(CMD.LEFT);
+  comanda.plates.forEach((plate, pi) => {
+    if (pi > 0) line('-'.repeat(WIDTH));
+    line(`Plato ${pi + 1}`);
+    plate.items.forEach(item => {
+      const mods = item.mods.length > 0 ? '  ' + item.mods.join('  ') : '';
+      line(`  ${item.qty}x ${item.name}${mods}`);
+    });
+    if (plate.note) line(`  ${plate.note}`);
+  });
+
+  line('='.repeat(WIDTH));
+  cmd(CMD.CUT);
+
+  return new Uint8Array(parts.flat());
+}
+
+async function printTicket(bytes) {
+  if (!config.printer.ip) {
+    showToast('Configura la IP de la impresora en Ajustes.');
+    return;
+  }
+  if (!isNative) {
+    showToast('Impresión disponible en la app instalada.');
+    return;
+  }
+
+  const TcpSocket = window.Capacitor?.Plugins?.TcpSocket;
+  if (!TcpSocket) {
+    showToast('Plugin de impresión no disponible.');
+    return;
+  }
+
+  let clientId = null;
+  try {
+    const result = await Promise.race([
+      TcpSocket.connect({ ipAddress: config.printer.ip, port: 9100 }),
+      new Promise((_, reject) => setTimeout(() => reject(new Error('timeout')), 3000)),
+    ]);
+    clientId = result.client;
+    await TcpSocket.send({ client: clientId, data: uint8ArrayToBase64(bytes), encoding: 'base64' });
+    await TcpSocket.disconnect({ client: clientId });
+    showToast('Impreso ✓');
+  } catch (_) {
+    if (clientId !== null) {
+      try { await TcpSocket.disconnect({ client: clientId }); } catch (_) {}
+    }
+    showToast('No se pudo conectar a la impresora. Verifica que esté encendida y en la misma red.');
+  }
+}
+
 /* ─── Renderizado: Pantalla Mesas ────────────────────────────── */
 function buildStatusText(mesa) {
   const hasBorrador = mesa.borrador.platos.some(p => p.items.length > 0 || p.note.trim());
@@ -704,7 +797,7 @@ function buscarImpresora() {
   }, 1500);
 }
 
-function probarImpresora() {
+async function probarImpresora() {
   const ipInput = document.getElementById('input-printer-ip');
   const ip      = ipInput ? ipInput.value.trim() : config.printer.ip;
   const result  = document.getElementById('config-printer-result');
@@ -715,7 +808,31 @@ function probarImpresora() {
     return;
   }
 
-  if (result) result.innerHTML = `<div class="printer-result-msg">La prueba de impresión real estará disponible cuando instales la app. IP: ${escapeHtml(ip)}</div>`;
+  if (!isNative) {
+    if (result) result.innerHTML = `<div class="printer-result-msg">La prueba real estará disponible cuando instales la app. IP: ${escapeHtml(ip)}</div>`;
+    return;
+  }
+
+  const TcpSocket = window.Capacitor?.Plugins?.TcpSocket;
+  if (!TcpSocket) return;
+
+  if (result) result.innerHTML = `<div class="printer-result-msg"><span class="spinner"></span> Conectando…</div>`;
+
+  let clientId = null;
+  try {
+    const res = await Promise.race([
+      TcpSocket.connect({ ipAddress: ip, port: 9100 }),
+      new Promise((_, reject) => setTimeout(() => reject(new Error('timeout')), 3000)),
+    ]);
+    clientId = res.client;
+    await TcpSocket.disconnect({ client: clientId });
+    if (result) result.innerHTML = `<div class="printer-result-msg success">Impresora conectada ✓</div>`;
+  } catch (_) {
+    if (clientId !== null) {
+      try { await TcpSocket.disconnect({ client: clientId }); } catch (_) {}
+    }
+    if (result) result.innerHTML = `<div class="printer-result-msg error">Sin respuesta en ${escapeHtml(ip)}. Verifica que la impresora esté encendida y en la misma red.</div>`;
+  }
 }
 
 function mostrarScreen(nombre) {
@@ -754,13 +871,22 @@ function renderHistorial() {
       <div class="burbuja-ticket">${ticketHTML}</div>
       <div class="burbuja-meta">
         <span class="burbuja-num">#${num}${comanda.sentAt ? ` · ${comanda.sentAt}` : ''}</span>
-        <button class="btn-expand" data-open="false" aria-expanded="false" aria-label="Ver formato cocina">
-          <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
-          Cocina
-        </button>
+        <div class="burbuja-actions">
+          <button class="btn-imprimir" aria-label="Imprimir comanda">
+            <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 6 2 18 2 18 9"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8"/></svg>
+          </button>
+          <button class="btn-expand" data-open="false" aria-expanded="false" aria-label="Ver formato cocina">
+            <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
+            Cocina
+          </button>
+        </div>
       </div>
       <div class="cocina-view">${cocinaHTML}</div>
     `;
+
+    burbuja.querySelector('.btn-imprimir').addEventListener('click', () => {
+      printTicket(formatTicket(comanda));
+    });
 
     const btnExp    = burbuja.querySelector('.btn-expand');
     const cocinaView = burbuja.querySelector('.cocina-view');

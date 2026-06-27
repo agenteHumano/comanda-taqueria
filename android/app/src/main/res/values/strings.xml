@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">Comanda Taquería</string>
+    <string name="title_activity_main">Comanda Taquería</string>
+    <string name="package_name">mx.comanda.taqueria</string>
+    <string name="custom_url_scheme">mx.comanda.taqueria</string>
+</resources>

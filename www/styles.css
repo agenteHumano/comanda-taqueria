@@ -169,6 +169,12 @@ input[type="number"]::-webkit-inner-spin-button { -webkit-appearance: none; }
   border-bottom: 1px solid var(--surface);
 }
 
+.mesas-header-actions {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+}
+
 .mesas-header h1 {
   font-size: var(--text-xl);
   font-weight: 700;
@@ -1332,32 +1338,32 @@ input[type="number"]::-webkit-inner-spin-button { -webkit-appearance: none; }
 /* ─── Teclado: variantes de tamaño ──────────────────────────── */
 .teclado--large .key-producto {
   height: 56px;
-  font-size: var(--text-base);
+  font-size: var(--text-lg);
 }
 
 .teclado--large .key-mod {
   height: 50px;
-  font-size: var(--text-sm);
+  font-size: var(--text-base);
 }
 
 .teclado--large .key-num {
   height: 44px;
-  font-size: var(--text-base);
+  font-size: var(--text-lg);
 }
 
 .teclado--xlarge .key-producto {
   height: 64px;
-  font-size: var(--text-lg);
+  font-size: var(--text-xl);
 }
 
 .teclado--xlarge .key-mod {
   height: 56px;
-  font-size: var(--text-base);
+  font-size: 1.25rem;
 }
 
 .teclado--xlarge .key-num {
   height: 50px;
-  font-size: var(--text-lg);
+  font-size: var(--text-xl);
 }
 
 /* ─── Utility ────────────────────────────────────────────────── */

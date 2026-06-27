@@ -302,6 +302,34 @@ function accionSiguientePlato() {
   renderModStates();
 }
 
+function nextComandaNum() {
+  const last = parseInt(localStorage.getItem('config.lastComandaNum'), 10) || 0;
+  const next = last + 1;
+  localStorage.setItem('config.lastComandaNum', String(next));
+  return next;
+}
+
+function formatSentAtDisplay(sentAt) {
+  if (!sentAt) return '';
+  if (sentAt.length > 5) {
+    const d = new Date(sentAt);
+    if (!isNaN(d.getTime())) {
+      return `${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`;
+    }
+  }
+  return sentAt;
+}
+
+function esDeHoy(sentAt) {
+  if (!sentAt) return true;
+  const d = new Date(sentAt);
+  if (isNaN(d.getTime())) return true;
+  const hoy = new Date();
+  return d.getFullYear() === hoy.getFullYear() &&
+         d.getMonth()    === hoy.getMonth() &&
+         d.getDate()     === hoy.getDate();
+}
+
 function accionEnviar() {
   const mesa = getMesa(state.currentMesa);
   const b = mesa.borrador;
@@ -318,7 +346,8 @@ function accionEnviar() {
   const now = new Date();
   const comanda = {
     table: state.currentMesa === 'PA_ASIGNAR' ? 'PA' : state.currentMesa,
-    sentAt: `${String(now.getHours()).padStart(2,'0')}:${String(now.getMinutes()).padStart(2,'0')}`,
+    sentAt: now.toISOString(),
+    comandaNum: nextComandaNum(),
     plates: platos.map(p => {
       const out = { items: p.items.map(i => ({ ...i, mods: [...i.mods] })) };
       if (p.note.trim()) out.note = p.note.trim();
@@ -461,7 +490,7 @@ function formatTicket(comanda) {
   line(label);
   cmd(CMD.BOLD_OFF);
   if (config.waiterName) line(config.waiterName);
-  line(comanda.sentAt);
+  line(formatSentAtDisplay(comanda.sentAt));
   line('='.repeat(WIDTH));
 
   const hasPrice = comanda.plates.some(plate => plate.items.some(i => i.unitPrice > 0));
@@ -538,6 +567,105 @@ async function printTicket(bytes) {
   }
 }
 
+/* ─── Resumen del día ───────────────────────────────────────── */
+function formatResumenDia(grupos, hoy) {
+  const WIDTH = 48;
+  const enc   = new TextEncoder();
+  const ESC   = 0x1B;
+  const GS    = 0x1D;
+  const CMD = {
+    INIT:     [ESC, 0x40],
+    BOLD_ON:  [ESC, 0x45, 0x01],
+    BOLD_OFF: [ESC, 0x45, 0x00],
+    CENTER:   [ESC, 0x61, 0x01],
+    LEFT:     [ESC, 0x61, 0x00],
+    LF:       [0x0A],
+    CUT:      [GS, 0x56, 0x42, 0x00],
+  };
+
+  const parts = [];
+  const cmd  = (c)   => parts.push(c);
+  const line = (str) => parts.push(Array.from(enc.encode(str)), CMD.LF);
+  const ral  = (left, right) =>
+    left + ' '.repeat(Math.max(1, WIDTH - left.length - right.length)) + right;
+
+  const MESES = ['ene','feb','mar','abr','may','jun','jul','ago','sep','oct','nov','dic'];
+  const fechaStr = `${hoy.getDate()} ${MESES[hoy.getMonth()]} ${hoy.getFullYear()}`;
+
+  cmd(CMD.INIT);
+  cmd(CMD.CENTER);
+  line('='.repeat(WIDTH));
+  cmd(CMD.BOLD_ON);
+  line('RESUMEN DEL DIA');
+  cmd(CMD.BOLD_OFF);
+  line(fechaStr);
+  line('='.repeat(WIDTH));
+
+  cmd(CMD.LEFT);
+  let grandTotal = 0;
+
+  grupos.forEach((grupo, gi) => {
+    if (gi > 0) line('-'.repeat(WIDTH));
+    cmd(CMD.BOLD_ON);
+    line(grupo.label);
+    cmd(CMD.BOLD_OFF);
+
+    let subtotal = 0;
+    grupo.comandas.forEach(comanda => {
+      const total = comanda.plates
+        .flatMap(p => p.items)
+        .reduce((s, i) => s + (i.unitPrice || 0) * i.qty, 0);
+      const numStr = comanda.comandaNum != null ? `#${comanda.comandaNum}` : '-';
+      line(ral(`  Comanda ${numStr}`, `$${total}.00`));
+      subtotal += total;
+    });
+
+    line(`  ${'-'.repeat(20)}`);
+    line(ral('  Subtotal:', `$${subtotal}.00`));
+    grandTotal += subtotal;
+  });
+
+  line('='.repeat(WIDTH));
+  cmd(CMD.BOLD_ON);
+  line(ral('TOTAL:', `$${grandTotal}.00`));
+  cmd(CMD.BOLD_OFF);
+  line('='.repeat(WIDTH));
+  cmd(CMD.CUT);
+
+  return new Uint8Array(parts.flat());
+}
+
+async function imprimirResumenDia() {
+  if (!config.printer.ip || !isNative) {
+    showToast('Impresora no configurada');
+    return;
+  }
+
+  const ORDEN_ESPECIALES = ['PR', 'PE', 'PA_ASIGNAR'];
+  const LABELS_ESPECIALES = { PR: 'Para recoger', PE: 'Para enviar', PA_ASIGNAR: 'Por asignar' };
+  const hoy = new Date();
+  const grupos = [];
+
+  for (let i = 1; i <= config.tableCount; i++) {
+    if (!state.mesas.has(i)) continue;
+    const comandasHoy = state.mesas.get(i).historial.filter(c => esDeHoy(c.sentAt));
+    if (comandasHoy.length > 0) grupos.push({ label: `Mesa ${i}`, comandas: comandasHoy });
+  }
+
+  ORDEN_ESPECIALES.forEach(id => {
+    if (!state.mesas.has(id)) return;
+    const comandasHoy = state.mesas.get(id).historial.filter(c => esDeHoy(c.sentAt));
+    if (comandasHoy.length > 0) grupos.push({ label: LABELS_ESPECIALES[id], comandas: comandasHoy });
+  });
+
+  if (grupos.length === 0) {
+    showToast('Sin comandas hoy');
+    return;
+  }
+
+  await printTicket(formatResumenDia(grupos, hoy));
+}
+
 /* ─── Renderizado: Pantalla Mesas ────────────────────────────── */
 function buildStatusText(mesa) {
   const hasBorrador = mesa.borrador.platos.some(p => p.items.length > 0 || p.note.trim());
@@ -578,6 +706,9 @@ function renderMesas() {
   }).length;
   const badge = document.getElementById('mesas-activas-badge');
   if (badge) badge.textContent = activas > 0 ? `· ${activas} activa${activas !== 1 ? 's' : ''}` : '';
+
+  const btnResumen = document.getElementById('btn-resumen-dia');
+  if (btnResumen) btnResumen.style.display = config.printer.ip ? '' : 'none';
 }
 
 function buildMesaCard(id, label) {
@@ -926,7 +1057,7 @@ function renderHistorial() {
       <div class="burbuja-ticket">${ticketHTML}</div>
       ${totalHTML}
       <div class="burbuja-meta">
-        <span class="burbuja-num">#${num}${comanda.sentAt ? ` · ${comanda.sentAt}` : ''}</span>
+        <span class="burbuja-num">#${num}${comanda.sentAt ? ` · ${formatSentAtDisplay(comanda.sentAt)}` : ''}</span>
         <div class="burbuja-actions">
           <button class="btn-imprimir" aria-label="Imprimir comanda">
             <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 6 2 18 2 18 9"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8"/></svg>
@@ -1106,12 +1237,17 @@ function buildDOM() {
     <div id="screen-mesas" class="screen mesas-screen active">
       <div class="mesas-header">
         <h1>Comanda <span class="mesas-activas-badge" id="mesas-activas-badge"></span></h1>
-        <button class="btn-config" id="btn-config" aria-label="Configuración">
-          <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
-            <circle cx="12" cy="12" r="3"/>
-            <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/>
-          </svg>
-        </button>
+        <div class="mesas-header-actions">
+          <button class="btn-config" id="btn-resumen-dia" aria-label="Resumen del día">
+            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 6 2 18 2 18 9"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8"/></svg>
+          </button>
+          <button class="btn-config" id="btn-config" aria-label="Configuración">
+            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
+              <circle cx="12" cy="12" r="3"/>
+              <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/>
+            </svg>
+          </button>
+        </div>
       </div>
       <div class="mesa-grid" id="mesa-grid"></div>
       <div class="especiales-section">
@@ -1413,6 +1549,12 @@ function bindEvents() {
 
   // Delegación de eventos principal
   app.addEventListener('click', e => {
+
+    // Resumen del día
+    if (e.target.closest('#btn-resumen-dia')) {
+      imprimirResumenDia();
+      return;
+    }
 
     // Configuración — abrir
     if (e.target.closest('#btn-config')) {

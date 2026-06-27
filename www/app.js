@@ -108,11 +108,13 @@ function loadConfig() {
 
     if (rawTacos) {
       const parsed = JSON.parse(rawTacos);
-      if (Array.isArray(parsed) && parsed.length === 10) config.products.tacos = parsed;
+      if (Array.isArray(parsed) && parsed.length === 10)
+        config.products.tacos = parsed.map(p => ({ ...p, price: Number(p.price) || 0 }));
     }
     if (rawDrinks) {
       const parsed = JSON.parse(rawDrinks);
-      if (Array.isArray(parsed) && parsed.length === 10) config.products.drinks = parsed;
+      if (Array.isArray(parsed) && parsed.length === 10)
+        config.products.drinks = parsed.map(p => ({ ...p, price: Number(p.price) || 0 }));
     }
 
     const rawModifiers = localStorage.getItem('config.modifiers');
@@ -169,7 +171,7 @@ function findProducto(sku) {
   const all = [...config.products.tacos, ...config.products.drinks];
   const p = all.find(item => item.sku === sku);
   if (!p) return null;
-  return { sku: p.sku, name: p.name || p.sku };
+  return { sku: p.sku, name: p.name || p.sku, price: Number(p.price) || 0 };
 }
 
 /* ─── Lógica de teclado ──────────────────────────────────────── */
@@ -195,7 +197,7 @@ function accionProducto(sku) {
   if (existente) {
     existente.qty += cant;
   } else {
-    plato.items.push({ sku, name: producto.name, qty: cant, mods: [] });
+    plato.items.push({ sku, name: producto.name, qty: cant, mods: [], unitPrice: producto.price || 0 });
   }
 
   b.lastSku = sku;
@@ -457,16 +459,39 @@ function formatTicket(comanda) {
   line(comanda.sentAt);
   line('='.repeat(WIDTH));
 
+  const hasPrice = comanda.plates.some(plate => plate.items.some(i => i.unitPrice > 0));
+
   cmd(CMD.LEFT);
   comanda.plates.forEach((plate, pi) => {
     if (pi > 0) line('-'.repeat(WIDTH));
     line(`Plato ${pi + 1}`);
     plate.items.forEach(item => {
-      const mods = item.mods.length > 0 ? '  ' + item.mods.join('  ') : '';
-      line(`  ${item.qty}x ${item.name}${mods}`);
+      if (hasPrice) {
+        const modsStr = item.mods.length > 0 ? '  ' + item.mods.join('  ') : '';
+        const left = `${item.qty}x ${item.name}${modsStr}`;
+        const lineTotal = (item.unitPrice || 0) > 0 ? item.qty * item.unitPrice : 0;
+        const right = lineTotal > 0 ? `$${lineTotal}` : '';
+        const innerWidth = WIDTH - 2;
+        const content = right
+          ? left.padEnd(innerWidth - right.length) + right
+          : left;
+        line(`  ${content}`);
+      } else {
+        const mods = item.mods.length > 0 ? '  ' + item.mods.join('  ') : '';
+        line(`  ${item.qty}x ${item.name}${mods}`);
+      }
     });
     if (plate.note) line(`  ${plate.note}`);
   });
+
+  if (hasPrice) {
+    const total = comanda.plates
+      .flatMap(p => p.items)
+      .reduce((sum, i) => sum + (i.unitPrice || 0) * i.qty, 0);
+    line('-'.repeat(WIDTH));
+    const totalStr = `TOTAL: $${total}`;
+    line(totalStr.padStart(WIDTH));
+  }
 
   line('='.repeat(WIDTH));
   cmd(CMD.CUT);
@@ -666,9 +691,11 @@ function abrirConfig() {
     products.forEach((p, i) => {
       const skuInput    = document.querySelector(`.config-sku-input[data-group="${group}"][data-idx="${i}"]`);
       const nameInput   = document.querySelector(`.config-name-input[data-group="${group}"][data-idx="${i}"]`);
+      const priceInput  = document.querySelector(`.config-price-input[data-group="${group}"][data-idx="${i}"]`);
       const toggleBtn   = document.querySelector(`.config-product-toggle[data-group="${group}"][data-idx="${i}"]`);
-      if (skuInput)  skuInput.value  = p.sku;
-      if (nameInput) nameInput.value = p.name;
+      if (skuInput)   skuInput.value   = p.sku;
+      if (nameInput)  nameInput.value  = p.name;
+      if (priceInput) priceInput.value = p.price > 0 ? p.price : '';
       if (toggleBtn) {
         const enabled = p.enabled !== false;
         toggleBtn.setAttribute('aria-pressed', String(enabled));
@@ -731,13 +758,15 @@ function guardarConfig() {
     const products = [];
     const slotCount = group === 'tacos' ? TACOS.length : BEBIDAS.length;
     for (let i = 0; i < slotCount; i++) {
-      const skuInput  = document.querySelector(`.config-sku-input[data-group="${group}"][data-idx="${i}"]`);
-      const nameInput = document.querySelector(`.config-name-input[data-group="${group}"][data-idx="${i}"]`);
-      const toggleBtn = document.querySelector(`.config-product-toggle[data-group="${group}"][data-idx="${i}"]`);
+      const skuInput   = document.querySelector(`.config-sku-input[data-group="${group}"][data-idx="${i}"]`);
+      const nameInput  = document.querySelector(`.config-name-input[data-group="${group}"][data-idx="${i}"]`);
+      const priceInput = document.querySelector(`.config-price-input[data-group="${group}"][data-idx="${i}"]`);
+      const toggleBtn  = document.querySelector(`.config-product-toggle[data-group="${group}"][data-idx="${i}"]`);
       const sku     = skuInput  ? skuInput.value.trim().toUpperCase().slice(0, 4) : '';
       const name    = nameInput ? nameInput.value.trim() : '';
       const enabled = toggleBtn ? toggleBtn.getAttribute('aria-pressed') !== 'false' : true;
-      products.push({ sku, name: name || sku, enabled });
+      const price   = priceInput ? (parseInt(priceInput.value, 10) || 0) : 0;
+      products.push({ sku, name: name || sku, enabled, price });
     }
     if (group === 'tacos') config.products.tacos  = products;
     else                   config.products.drinks = products;
@@ -866,9 +895,15 @@ function renderHistorial() {
     const ticketHTML = renderTicketHTML(comanda.plates);
     const cocinaHTML = renderTicketCocinaHTML(comanda.plates);
     const num = idx + 1;
+    const allItems = comanda.plates.flatMap(p => p.items);
+    const comandaTotal = allItems.reduce((s, i) => s + (i.unitPrice || 0) * i.qty, 0);
+    const totalHTML = comandaTotal > 0
+      ? `<div class="burbuja-total">Total: $${comandaTotal}</div>`
+      : '';
 
     burbuja.innerHTML = `
       <div class="burbuja-ticket">${ticketHTML}</div>
+      ${totalHTML}
       <div class="burbuja-meta">
         <span class="burbuja-num">#${num}${comanda.sentAt ? ` · ${comanda.sentAt}` : ''}</span>
         <div class="burbuja-actions">
@@ -1205,6 +1240,11 @@ function buildDOM() {
                        data-group="tacos" data-idx="${i}"
                        placeholder="Nombre completo" autocomplete="off"
                        aria-label="Nombre taco ${i + 1}">
+                <input type="text" class="config-price-input"
+                       data-group="tacos" data-idx="${i}"
+                       inputmode="numeric" maxlength="6" placeholder="$0"
+                       autocomplete="off"
+                       aria-label="Precio taco ${i + 1}">
               </div>
             `).join('')}
           </div>
@@ -1228,6 +1268,11 @@ function buildDOM() {
                        data-group="drinks" data-idx="${i}"
                        placeholder="Nombre completo" autocomplete="off"
                        aria-label="Nombre bebida ${i + 1}">
+                <input type="text" class="config-price-input"
+                       data-group="drinks" data-idx="${i}"
+                       inputmode="numeric" maxlength="6" placeholder="$0"
+                       autocomplete="off"
+                       aria-label="Precio bebida ${i + 1}">
               </div>
             `).join('')}
           </div>

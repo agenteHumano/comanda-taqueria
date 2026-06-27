@@ -475,6 +475,14 @@ input[type="number"]::-webkit-inner-spin-button { -webkit-appearance: none; }
   white-space: normal;
 }
 
+.burbuja-total {
+  font-size: var(--text-xs);
+  color: var(--ink-muted);
+  text-align: right;
+  margin-top: var(--space-2);
+  font-family: var(--font-mono);
+}
+
 .burbuja-meta {
   display: flex;
   align-items: center;
@@ -1074,7 +1082,8 @@ input[type="number"]::-webkit-inner-spin-button { -webkit-appearance: none; }
 }
 
 .config-product-row.disabled .config-sku-input,
-.config-product-row.disabled .config-name-input {
+.config-product-row.disabled .config-name-input,
+.config-product-row.disabled .config-price-input {
   opacity: 0.35;
 }
 
@@ -1112,6 +1121,25 @@ input[type="number"]::-webkit-inner-spin-button { -webkit-appearance: none; }
 }
 
 .config-name-input:focus {
+  border-color: var(--primary);
+}
+
+.config-price-input {
+  width: 64px;
+  flex-shrink: 0;
+  background: var(--surface);
+  border: 1.5px solid var(--surface-3);
+  border-radius: var(--radius-sm);
+  padding: 0 var(--space-2);
+  color: var(--ink);
+  font-size: var(--text-sm);
+  font-family: var(--font-mono);
+  text-align: right;
+  outline: none;
+  min-height: 44px;
+}
+
+.config-price-input:focus {
   border-color: var(--primary);
 }
 

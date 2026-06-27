@@ -1035,15 +1035,16 @@ input[type="number"]::-webkit-inner-spin-button { -webkit-appearance: none; }
 }
 
 .config-product-row {
-  display: flex;
-  gap: var(--space-2);
+  display: grid;
+  grid-template-columns: 44px 64px 1fr;
+  column-gap: var(--space-2);
+  row-gap: var(--space-1);
   align-items: center;
 }
 
 .config-product-toggle {
   width: 44px;
   height: 44px;
-  flex-shrink: 0;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -1125,12 +1126,12 @@ input[type="number"]::-webkit-inner-spin-button { -webkit-appearance: none; }
 }
 
 .config-price-input {
-  width: 64px;
-  flex-shrink: 0;
+  grid-column: 2 / 4;
+  grid-row: 2;
   background: var(--surface);
   border: 1.5px solid var(--surface-3);
   border-radius: var(--radius-sm);
-  padding: 0 var(--space-2);
+  padding: 0 var(--space-3);
   color: var(--ink);
   font-size: var(--text-sm);
   font-family: var(--font-mono);
@@ -1258,6 +1259,34 @@ input[type="number"]::-webkit-inner-spin-button { -webkit-appearance: none; }
   transform: scale(0.98);
 }
 
+/* Keyboard size selector */
+.keyboard-size-row {
+  display: flex;
+  gap: var(--space-1);
+}
+
+.keyboard-size-btn {
+  flex: 1;
+  height: 44px;
+  background: var(--surface-2);
+  color: var(--ink-muted);
+  border-radius: var(--radius-sm);
+  font-size: var(--text-sm);
+  font-weight: 600;
+  transition:
+    background var(--dur-fast) var(--ease-out-quart),
+    color      var(--dur-fast) var(--ease-out-quart);
+}
+
+.keyboard-size-btn[aria-pressed="true"] {
+  background: var(--primary);
+  color: var(--primary-fg);
+}
+
+.keyboard-size-btn:active {
+  opacity: 0.8;
+}
+
 /* Gear button in mesas header */
 .btn-config {
   display: flex;
@@ -1298,6 +1327,37 @@ input[type="number"]::-webkit-inner-spin-button { -webkit-appearance: none; }
 .key-producto.key-disabled,
 .key-mod.key-disabled {
   display: none;
+}
+
+/* ─── Teclado: variantes de tamaño ──────────────────────────── */
+.teclado--large .key-producto {
+  height: 56px;
+  font-size: var(--text-base);
+}
+
+.teclado--large .key-mod {
+  height: 50px;
+  font-size: var(--text-sm);
+}
+
+.teclado--large .key-num {
+  height: 44px;
+  font-size: var(--text-base);
+}
+
+.teclado--xlarge .key-producto {
+  height: 64px;
+  font-size: var(--text-lg);
+}
+
+.teclado--xlarge .key-mod {
+  height: 56px;
+  font-size: var(--text-base);
+}
+
+.teclado--xlarge .key-num {
+  height: 50px;
+  font-size: var(--text-lg);
 }
 
 /* ─── Utility ────────────────────────────────────────────────── */

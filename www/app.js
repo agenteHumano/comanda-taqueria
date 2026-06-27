@@ -45,6 +45,7 @@ const DEFAULT_MODIFIERS = [
 let config = {
   waiterName: '',
   tableCount: 10,
+  keyboardSize: 'normal',
   products: {
     tacos:  TACOS.map(p  => ({ ...p })),
     drinks: BEBIDAS.map(p => ({ ...p })),
@@ -124,6 +125,9 @@ function loadConfig() {
     }
 
     config.printer.ip = localStorage.getItem('config.printer.ip') || '';
+
+    const rawKbSize = localStorage.getItem('config.keyboardSize');
+    if (['normal', 'large', 'xlarge'].includes(rawKbSize)) config.keyboardSize = rawKbSize;
   } catch (_) {}
 }
 
@@ -135,6 +139,7 @@ function saveConfig() {
     localStorage.setItem('config.products.drinks', JSON.stringify(config.products.drinks));
     localStorage.setItem('config.modifiers',       JSON.stringify(config.modifiers));
     localStorage.setItem('config.printer.ip', config.printer.ip);
+    localStorage.setItem('config.keyboardSize', config.keyboardSize);
   } catch (_) {}
 }
 
@@ -726,6 +731,10 @@ function abrirConfig() {
   const resultEl = document.getElementById('config-printer-result');
   if (resultEl) resultEl.innerHTML = '';
 
+  document.querySelectorAll('.keyboard-size-btn').forEach(btn => {
+    btn.setAttribute('aria-pressed', String(btn.dataset.size === config.keyboardSize));
+  });
+
   actualizarPrinterStatus();
   mostrarScreen('config');
 }
@@ -789,11 +798,23 @@ function guardarConfig() {
   const ipInput = document.getElementById('input-printer-ip');
   config.printer.ip = ipInput ? ipInput.value.trim() : '';
 
+  const activeSizeBtn = document.querySelector('.keyboard-size-btn[aria-pressed="true"]');
+  config.keyboardSize = activeSizeBtn ? activeSizeBtn.dataset.size : 'normal';
+
   saveConfig();
   renderKeyboardRows();
   renderModifierRow();
+  applyKeyboardSize();
   volverDeConfig();
   showToast('Configuración guardada');
+}
+
+function applyKeyboardSize() {
+  const teclado = document.querySelector('.teclado');
+  if (!teclado) return;
+  teclado.classList.remove('teclado--large', 'teclado--xlarge');
+  if (config.keyboardSize === 'large')  teclado.classList.add('teclado--large');
+  if (config.keyboardSize === 'xlarge') teclado.classList.add('teclado--xlarge');
 }
 
 function actualizarPrinterStatus() {
@@ -1216,6 +1237,14 @@ function buildDOM() {
             <input type="number" id="input-table-count" class="config-input"
                    min="1" max="20" inputmode="numeric" autocomplete="off">
           </div>
+          <div class="config-field">
+            <label class="config-label">Tamaño del teclado</label>
+            <div class="keyboard-size-row">
+              <button class="keyboard-size-btn" data-size="normal" aria-pressed="true" type="button">Normal</button>
+              <button class="keyboard-size-btn" data-size="large" aria-pressed="false" type="button">Grande</button>
+              <button class="keyboard-size-btn" data-size="xlarge" aria-pressed="false" type="button">Muy grande</button>
+            </div>
+          </div>
         </section>
 
         <!-- Sección: Productos -->
@@ -1433,6 +1462,14 @@ function bindEvents() {
       return;
     }
 
+    // Tamaño del teclado — selección
+    const kbSizeBtn = e.target.closest('.keyboard-size-btn');
+    if (kbSizeBtn) {
+      document.querySelectorAll('.keyboard-size-btn').forEach(b => b.setAttribute('aria-pressed', 'false'));
+      kbSizeBtn.setAttribute('aria-pressed', 'true');
+      return;
+    }
+
     // Toggle de producto en config
     const toggleBtn = e.target.closest('.config-product-toggle');
     if (toggleBtn) {
@@ -1564,6 +1601,7 @@ function init() {
   renderKeyboardRows();
   renderModifierRow();
   bindEvents();
+  applyKeyboardSize();
   renderMesas();
 }
 

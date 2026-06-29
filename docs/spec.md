@@ -46,6 +46,8 @@ Es la pantalla de entrada. Muestra:
   Nota: el código `PA` de "por asignar" coincide con la abreviatura de producto `PA` (Pastor) del teclado. Viven en pantallas distintas así que en uso real no debería confundir, pero queda documentado por si se prefiere cambiar a otro código al implementar.
 
 - Ícono de engranaje (⚙) en el encabezado, alineado a la derecha, que abre la pantalla de Configuración.
+- Ícono de impresora en el encabezado, a la izquierda del engranaje, visible solo cuando hay una IP de impresora configurada. Al tocarlo ejecuta el **Resumen del día** (ver sección 3.4).
+- Ícono de tema (monitor / sol / luna) en el encabezado, a la izquierda del botón de resumen. Cicla entre tres estados al tocarlo: `auto` (sigue `prefers-color-scheme` del sistema), `light` (fuerza modo claro), `dark` (fuerza modo oscuro). Persiste en `config.theme`. Ver sección 8 para la paleta de colores.
 - Tocar cualquier tarjeta (numerada o especial) abre la pantalla de Comanda para ese identificador.
 
 ### 3.2 Pantalla "Comanda"
@@ -63,12 +65,45 @@ No hay acceso a Configuración desde esta pantalla.
 
 Accesible solo desde el ícono de engranaje en la pantalla de Mesas. Tiene cuatro secciones:
 
-1. **Mesero** — nombre del mesero (texto libre, opcional) y número de mesas (1–20, default 10).
-2. **Productos** — dos subsecciones: Tacos (10 slots) y Bebidas (10 slots). Cada slot tiene toggle activar/desactivar + abreviatura (máx. 4 chars) + nombre completo. Los slots vacíos se ocultan; un botón "+ Agregar" al final de cada subsección revela el siguiente slot disponible.
-3. **Modificadores** — 7 slots configurables con la misma estructura que los productos. Defaults: S/V, S/C, S/CI en posiciones 1–3; los 4 restantes vacíos y desactivados.
-4. **Impresora** — estado de la IP guardada, botón "Buscar en mi red" (placeholder hasta Fase 3), campo de IP manual, y botón "Probar conexión" cuando hay IP guardada.
+1. **Mesero** — nombre del mesero (texto libre, opcional), número de mesas (1–20, default 10), y selector de **tamaño del teclado** (Normal / Grande / Muy grande). El tamaño aplica clases CSS al contenedor del teclado y ajusta height y font-size de las teclas. Persiste en `config.keyboardSize`.
+2. **Productos** — dos subsecciones: Tacos (10 slots) y Bebidas (10 slots). Cada slot tiene toggle activar/desactivar + abreviatura (máx. 4 chars) + nombre completo + precio unitario en pesos. Los slots vacíos se ocultan; un botón "+ Agregar" al final de cada subsección revela el siguiente slot disponible. El precio es opcional (default 0); si es 0, el producto funciona igual pero no imprime precio.
+3. **Modificadores** — 7 slots configurables con la misma estructura que los productos (sin campo de precio). Defaults: S/V, S/C, S/CI en posiciones 1–3; los 4 restantes vacíos y desactivados.
+4. **Impresora** — estado de la IP guardada, botón "Buscar en mi red", campo de IP manual, y botón "Probar conexión" cuando hay IP guardada. "Buscar en mi red" ejecuta el escaneo TCP real en el APK (ver sección 9.1); en el navegador muestra un mensaje informativo.
 
 Un botón "Guardar" al final aplica todos los cambios y regresa a Mesas. Volver con el botón de regreso descarta los cambios sin guardar.
+
+### 3.4 Resumen del día
+
+Función accesible desde el botón de impresora en el encabezado de Mesas. Genera e imprime un ticket ESC/POS de 48 chars con todas las comandas enviadas hoy, agrupadas por mesa.
+
+**"Hoy"**: comandas cuyo `sentAt` corresponde a la fecha actual en la zona horaria local. Las comandas sin `sentAt` (guardadas antes de implementar el timestamp ISO) se incluyen siempre.
+
+**Orden**: mesas numeradas en orden ascendente (1–20), luego PR, PE, PA. Se omiten las mesas sin comandas hoy.
+
+**Formato**:
+```
+================================================
+          RESUMEN DEL DIA
+          26 jun 2026
+================================================
+Mesa 1
+  Comanda #23        $45.00
+  Comanda #24       $300.00
+  --------------------
+  Subtotal:         $345.00
+------------------------------------------------
+Mesa 3
+  Comanda #25        $80.00
+  --------------------
+  Subtotal:          $80.00
+================================================
+TOTAL:              $425.00
+================================================
+```
+
+El total de cada comanda es la suma de `item.unitPrice × item.qty`. Si una comanda no tiene precios configurados, su total es `$0.00`. La línea TOTAL siempre aparece. Corte de papel al final.
+
+Si no hay comandas hoy: toast "Sin comandas hoy". Si no hay impresora configurada o no es plataforma nativa: toast "Impresora no configurada".
 
 ## 4. Modelo de datos
 
@@ -76,19 +111,20 @@ Un botón "Guardar" al final aplica todos los cambios y regresa a Mesas. Volver 
 
 ```js
 {
-  table: 5,        // número (1 a N, configurable) para mesas, o "PR" | "PE" | "PA" para pedidos especiales
-  sentAt: "14:32", // hora de envío en formato HH:MM
+  table: 5,             // número (1 a N, configurable) para mesas, o "PR" | "PE" | "PA" para pedidos especiales
+  sentAt: "2026-06-27T20:32:00.000Z", // timestamp ISO del momento de envío (new Date().toISOString())
+  comandaNum: 42,       // número correlativo global; incrementa con cada comanda enviada
   plates: [
     {
       items: [
-        { sku: "PA", name: "Pastor", qty: 3, mods: ["S/C"] },
-        { sku: "AS", name: "Asada",  qty: 3, mods: [] }
+        { sku: "PA", name: "Pastor", qty: 3, mods: ["S/C"], unitPrice: 25 },
+        { sku: "AS", name: "Asada",  qty: 3, mods: [],      unitPrice: 25 }
       ],
       note: "sin charola, para llevar en bolsa aparte" // opcional, se omite si está vacío
     },
     {
       items: [
-        { sku: "QU", name: "Quesadilla", qty: 1, mods: [] }
+        { sku: "QU", name: "Quesadilla", qty: 1, mods: [], unitPrice: 0 }
       ]
     }
   ]
@@ -99,16 +135,22 @@ Reglas:
 - `mods` es un arreglo — un producto puede llevar varios modificadores combinados.
 - `note` vive a nivel de plato, no de producto. Un plato puede tener `note` sin `items` (se conserva al filtrar antes de enviar).
 - `sku` y `name` vienen del catálogo configurado en `config.products` / `config.modifiers`.
+- `unitPrice` se copia del catálogo al momento de agregar el producto; si el producto no tiene precio configurado vale `0`. El total de la línea (`qty × unitPrice`) se calcula al renderizar, no se guarda.
+- `comandaNum` persiste en `localStorage` como `config.lastComandaNum` y no se reinicia entre sesiones. Las comandas antiguas sin este campo se tratan como válidas.
+- `cancelled` es un campo booleano opcional. Ausente o `false` = comanda activa. `true` = comanda cancelada; el campo no se revierte una vez asignado. Las comandas canceladas permanecen en el historial pero se excluyen de conteos y totales.
 
 ### 4.2 Configuración (localStorage)
 
 ```js
 config.waiterName      // string — nombre del mesero (puede estar vacío)
 config.tableCount      // número entero, 1–20, default 10
-config.products.tacos  // array de 10 objetos { sku, name, enabled }
-config.products.drinks // array de 10 objetos { sku, name, enabled }
+config.keyboardSize    // "normal" | "large" | "xlarge", default "normal"
+config.products.tacos  // array de 10 objetos { sku, name, enabled, price }
+config.products.drinks // array de 10 objetos { sku, name, enabled, price }
 config.modifiers       // array de 7 objetos { sku, name, enabled }
 config.printer.ip      // string — IP de la impresora (puede estar vacío)
+config.lastComandaNum  // número entero — contador global de comandas enviadas
+config.theme           // "auto" | "light" | "dark", default "auto"
 ```
 
 Valores por default de `config.products.tacos`:
@@ -193,7 +235,7 @@ cantidad (opcional, default 1) → producto → [modificador opcional] → [nota
 - Al confirmar un producto, el contador de cantidad se reinicia.
 
 ### 5.4 Productos
-- Tocar un producto agrega `{ sku, name, qty, mods: [] }` al plato activo.
+- Tocar un producto agrega `{ sku, name, qty, mods: [], unitPrice }` al plato activo. `unitPrice` se copia del catálogo en ese momento.
 - Si el mismo SKU ya existe en el plato activo, se suma la cantidad en vez de duplicar la línea.
 - El producto recién agregado queda marcado internamente como "último producto tocado" — recibirá el siguiente modificador.
 
@@ -244,6 +286,10 @@ Plato 2
 - 1 Quesadilla
 ```
 
+Si al menos un item de la comanda tiene `unitPrice > 0`, la burbuja muestra el total al pie (`Total: $N`) y el ticket impreso incluye una columna de precios alineada a la derecha en 48 chars, más una línea `TOTAL: $N` al final. Si ningún item tiene precio, la burbuja y el ticket quedan igual que antes.
+
+Las comandas canceladas permanecen visibles en el historial con `opacity: 0.45`, el texto del ticket tachado y una etiqueta "Cancelada" en color de error. Los botones de imprimir y cancelar desaparecen; solo permanece el botón "Cocina". El contador de "N enviadas" en la tarjeta de mesa y el badge en el encabezado de Comanda cuentan únicamente comandas activas (sin `cancelled: true`). En el resumen del día, las comandas canceladas aparecen en el ticket como `Comanda #N  CANCELADA` pero no suman al subtotal ni al total.
+
 ## 7. Mesas y pedidos especiales (estado independiente)
 
 Cada mesa numerada y cada pedido especial (`PR`, `PE`, `PA`) tiene su propio estado completamente independiente: historial de comandas enviadas y borrador en construcción.
@@ -261,6 +307,7 @@ Al reducir el número de mesas desde Configuración, el estado de las mesas elim
 - Tipografía monoespaciada en las líneas de ticket para alineación visual.
 - Las tarjetas de mesa tienen altura fija para que la grilla no salte al cambiar de estado.
 - Palette OKLCH, design tokens con variables CSS, fuente UI: Inter, fuente mono: JetBrains Mono.
+- La app soporta modo claro y modo oscuro. El tema se controla mediante clases en `<html>`: `.theme-light` para claro explícito, `.theme-dark` para oscuro explícito. Sin clase (`config.theme = "auto"`), la app responde a `prefers-color-scheme` del dispositivo. La paleta oscura es el default en `:root`; la paleta clara sobreescribe las mismas variables bajo `:root.theme-light` y `@media (prefers-color-scheme: light) { :root:not(.theme-dark) }`. Un script inline síncrono en `<head>` aplica la clase antes del primer render para evitar flash de tema.
 
 ## 9. Stack técnico y notas de implementación
 
@@ -268,9 +315,47 @@ Al reducir el número de mesas desde Configuración, el estado de las mesas elim
 - Sin backend. Estado de mesas y configuración persisten en `localStorage` — la app es completamente funcional offline.
 - Claves de `localStorage`:
   - `comanda-taqueria` — estado de todas las mesas (historial + borrador).
-  - `config.waiterName`, `config.tableCount`, `config.products.tacos`, `config.products.drinks`, `config.modifiers`, `config.printer.ip` — configuración.
-- Estructura de archivos: `index.html`, `styles.css`, `app.js`.
-- Impresión térmica (ESC/POS por TCP, puerto 9100) requiere `capacitor-community/tcp-socket` y se implementa en Fase 3 cuando la app se empaquete como APK con Capacitor.
+  - `config.waiterName`, `config.tableCount`, `config.keyboardSize`, `config.theme`, `config.products.tacos`, `config.products.drinks`, `config.modifiers`, `config.printer.ip`, `config.lastComandaNum` — configuración.
+- Estructura de archivos: los archivos web (`index.html`, `styles.css`, `app.js`) viven en `www/`. La raíz del repo tiene un `index.html` de redirect para GitHub Pages.
+- La app corre también como APK Android usando Capacitor. El plugin TCP (`capacitor-tcp-socket`) habilita la impresión térmica ESC/POS por red.
+- Script `build-apk.sh` en la raíz: copia `www/` a la copia Windows del proyecto y ejecuta `npx cap sync` vía PowerShell para sincronizar antes de cada build en Android Studio.
+
+### 9.1 Impresión ESC/POS — detalles de implementación
+
+#### Secuencia de bytes al inicio de cada ticket
+
+Todo ticket generado por `formatTicket()` abre con esta secuencia antes de cualquier texto:
+
+```
+ESC @          (0x1B 0x40)       — inicializar impresora
+ESC t 19       (0x1B 0x74 0x13)  — seleccionar codepage PC858
+```
+
+El comando `ESC t 19` le indica a la impresora que el texto que sigue está codificado en PC858. Sin este comando los caracteres acentuados del español se imprimen como símbolos incorrectos.
+
+#### Codificación de texto: función encodePC858()
+
+`formatTicket()` usa `encodePC858(str)` en lugar de `TextEncoder`. Los caracteres ASCII (0x00–0x7F) se pasan tal cual; los caracteres especiales del español se mapean a sus equivalentes en PC858:
+
+| Char | Byte | Char | Byte | Char | Byte |
+|------|------|------|------|------|------|
+| á | 0xA0 | é | 0x82 | í | 0xA1 |
+| ó | 0xA2 | ú | 0xA3 | ñ | 0xA4 |
+| Á | 0x41 | É | 0x90 | Í | 0xD6 |
+| Ó | 0xE0 | Ú | 0xE9 | Ñ | 0xA5 |
+| ü | 0x81 | Ü | 0x9A | ¡ | 0xAD |
+| ¿ | 0xA8 | € | 0xD5 | | |
+
+Cualquier carácter fuera de ASCII no incluido en la tabla se sustituye por `?` (0x3F).
+
+#### Verificación de impresora en el escaneo de red
+
+Al buscar impresoras, no basta con que un dispositivo acepte la conexión en el puerto 9100 — cualquier servidor TCP puede responder en ese puerto. La verificación se hace en dos pasos sobre la **misma** conexión TCP:
+
+1. **ESC @** (`0x1B 0x40`) — inicialización ESC/POS. Si la conexión se cierra al recibir esto, el dispositivo no es una impresora ESC/POS.
+2. **DLE EOT 1** (`0x10 0x04 0x01`) — solicitud de byte de estado. La impresora responde con exactamente 1 byte. Timeout de 1 segundo. Si llega el byte, la IP se confirma como impresora real.
+
+Solo las IPs que superan ambos pasos aparecen en los resultados del escaneo.
 
 ## 10. Checklist de aceptación
 
@@ -303,4 +388,23 @@ Al reducir el número de mesas desde Configuración, el estado de las mesas elim
 - [x] Campo de IP manual para la impresora, siempre disponible.
 - [x] Botón "Probar conexión" (placeholder) cuando hay IP guardada.
 - [x] Toda la configuración persiste en `localStorage` y se carga al abrir la app.
-- [ ] Lógica real de escaneo de red ("Buscar en mi red") — pendiente Fase 3 (requiere Capacitor).
+- [x] Lógica real de escaneo de red ("Buscar en mi red") con verificación ESC/POS — implementado en Fase 3.
+
+### Fase 3 — Capacitor + Impresión térmica
+- [x] APK Android generado con Capacitor, instalable por sideloading.
+- [x] Impresión térmica ESC/POS por TCP (puerto 9100) desde el APK.
+- [x] Botón "Imprimir" en cada burbuja del historial.
+- [x] Toast de error si la impresora no responde; toast informativo en el navegador.
+- [x] Script `build-apk.sh` para sincronizar WSL → Windows antes del build.
+
+### Adiciones posteriores
+- [x] Campo `price` en productos del catálogo; `unitPrice` guardado en cada item al capturar.
+- [x] Total por comanda en burbuja del historial y en ticket impreso (cuando hay precios).
+- [x] Selector de tamaño del teclado (Normal / Grande / Muy grande) en Configuración.
+- [x] Timestamp `sentAt` ISO 8601 en cada comanda enviada.
+- [x] Número correlativo `comandaNum` en cada comanda enviada; persiste en `config.lastComandaNum`.
+- [x] Resumen del día: botón en Mesas, agrupa por mesa, imprime ticket con subtotales y total global.
+- [x] Cancelación de comandas: botón X en burbuja, confirmación nativa, burbuja tachada con etiqueta "Cancelada", excluida de conteos y totales.
+- [x] Modo claro/oscuro: botón de tres estados (auto/light/dark) en encabezado de Mesas, sin flash al cargar, persiste en `config.theme`.
+- [x] Búsqueda real de impresoras en red: escaneo TCP en lotes de 50, verificación ESC/POS en dos pasos (ESC @ + DLE EOT 1) sobre la misma conexión; solo muestra IPs confirmadas como impresoras.
+- [x] Corrección de acentos en tickets: codepage PC858 activada con ESC t 19 al inicio de cada ticket; `encodePC858()` reemplaza `TextEncoder` en `formatTicket()`.

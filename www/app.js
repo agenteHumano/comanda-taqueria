@@ -46,6 +46,7 @@ let config = {
   waiterName: '',
   tableCount: 10,
   keyboardSize: 'normal',
+  theme: 'auto',
   products: {
     tacos:  TACOS.map(p  => ({ ...p })),
     drinks: BEBIDAS.map(p => ({ ...p })),
@@ -128,6 +129,9 @@ function loadConfig() {
 
     const rawKbSize = localStorage.getItem('config.keyboardSize');
     if (['normal', 'large', 'xlarge'].includes(rawKbSize)) config.keyboardSize = rawKbSize;
+
+    const rawTheme = localStorage.getItem('config.theme');
+    if (['auto', 'light', 'dark'].includes(rawTheme)) config.theme = rawTheme;
   } catch (_) {}
 }
 
@@ -140,6 +144,7 @@ function saveConfig() {
     localStorage.setItem('config.modifiers',       JSON.stringify(config.modifiers));
     localStorage.setItem('config.printer.ip', config.printer.ip);
     localStorage.setItem('config.keyboardSize', config.keyboardSize);
+    localStorage.setItem('config.theme',        config.theme);
   } catch (_) {}
 }
 
@@ -612,12 +617,16 @@ function formatResumenDia(grupos, hoy) {
 
     let subtotal = 0;
     grupo.comandas.forEach(comanda => {
-      const total = comanda.plates
-        .flatMap(p => p.items)
-        .reduce((s, i) => s + (i.unitPrice || 0) * i.qty, 0);
       const numStr = comanda.comandaNum != null ? `#${comanda.comandaNum}` : '-';
-      line(ral(`  Comanda ${numStr}`, `$${total}.00`));
-      subtotal += total;
+      if (comanda.cancelled) {
+        line(`  Comanda ${numStr}  CANCELADA`);
+      } else {
+        const total = comanda.plates
+          .flatMap(p => p.items)
+          .reduce((s, i) => s + (i.unitPrice || 0) * i.qty, 0);
+        line(ral(`  Comanda ${numStr}`, `$${total}.00`));
+        subtotal += total;
+      }
     });
 
     line(`  ${'-'.repeat(20)}`);
@@ -669,7 +678,7 @@ async function imprimirResumenDia() {
 /* ─── Renderizado: Pantalla Mesas ────────────────────────────── */
 function buildStatusText(mesa) {
   const hasBorrador = mesa.borrador.platos.some(p => p.items.length > 0 || p.note.trim());
-  const numEnviadas = mesa.historial.length;
+  const numEnviadas = mesa.historial.filter(c => !c.cancelled).length;
   return {
     hasBorrador,
     numEnviadas,
@@ -868,6 +877,14 @@ function abrirConfig() {
 
   actualizarPrinterStatus();
   mostrarScreen('config');
+
+  const localIPEl = document.getElementById('config-local-ip');
+  if (localIPEl) {
+    localIPEl.textContent = '';
+    getLocalIP().then(ip => {
+      if (ip && localIPEl) localIPEl.textContent = `Tu red: ${ip.split('.').slice(0, 3).join('.')}.x`;
+    });
+  }
 }
 
 function volverDeConfig() {
@@ -948,6 +965,39 @@ function applyKeyboardSize() {
   if (config.keyboardSize === 'xlarge') teclado.classList.add('teclado--xlarge');
 }
 
+function themeIconHTML(theme) {
+  if (theme === 'light') {
+    return `<svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></svg>`;
+  }
+  if (theme === 'dark') {
+    return `<svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>`;
+  }
+  return `<svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="3" width="20" height="14" rx="2" ry="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg>`;
+}
+
+function applyTheme() {
+  const root = document.documentElement;
+  root.classList.remove('theme-light', 'theme-dark');
+  if (config.theme === 'light') root.classList.add('theme-light');
+  if (config.theme === 'dark')  root.classList.add('theme-dark');
+}
+
+function actualizarBtnTheme() {
+  const btn = document.getElementById('btn-theme');
+  if (!btn) return;
+  btn.innerHTML = themeIconHTML(config.theme);
+  const labels = { auto: 'Tema: automático', light: 'Tema: claro', dark: 'Tema: oscuro' };
+  btn.setAttribute('aria-label', labels[config.theme] || 'Cambiar tema');
+}
+
+function ciclarTema() {
+  const ciclo = { auto: 'light', light: 'dark', dark: 'auto' };
+  config.theme = ciclo[config.theme] || 'auto';
+  localStorage.setItem('config.theme', config.theme);
+  applyTheme();
+  actualizarBtnTheme();
+}
+
 function actualizarPrinterStatus() {
   const statusEl  = document.getElementById('config-printer-status');
   const probarBtn = document.getElementById('btn-probar-impresora');
@@ -964,18 +1014,155 @@ function actualizarPrinterStatus() {
   }
 }
 
-function buscarImpresora() {
+function getLocalIP() {
+  return new Promise((resolve) => {
+    let resolved = false;
+    let pc;
+    try {
+      pc = new RTCPeerConnection({ iceServers: [] });
+      pc.createDataChannel('');
+      pc.createOffer()
+        .then(offer => pc.setLocalDescription(offer))
+        .catch(() => { if (!resolved) { resolved = true; resolve(null); } });
+
+      pc.onicecandidate = (e) => {
+        if (resolved || !e.candidate) return;
+        const match = /(\d+\.\d+\.\d+\.\d+)/.exec(e.candidate.candidate);
+        if (match && !match[1].startsWith('169.254')) {
+          resolved = true;
+          resolve(match[1]);
+          try { pc.close(); } catch (_) {}
+        }
+      };
+    } catch (_) {
+      resolved = true;
+      resolve(null);
+      return;
+    }
+    setTimeout(() => {
+      if (!resolved) {
+        resolved = true;
+        resolve(null);
+        try { pc.close(); } catch (_) {}
+      }
+    }, 5000);
+  });
+}
+
+async function probarIP(ip, timeoutMs = 3000) {
+  if (!isNative) return false;
+  const TcpSocket = window.Capacitor?.Plugins?.TcpSocket;
+  if (!TcpSocket) return false;
+
+  let clientId = null;
+  try {
+    const result = await Promise.race([
+      TcpSocket.connect({ ipAddress: ip, port: 9100 }),
+      new Promise((_, reject) => setTimeout(() => reject(new Error('timeout')), timeoutMs))
+    ]);
+    clientId = result.client;
+    await TcpSocket.send({
+      client: clientId,
+      data: btoa(String.fromCharCode(0x1B, 0x40)),
+      encoding: 'base64'
+    });
+    await TcpSocket.disconnect({ client: clientId });
+    return true;
+  } catch (e) {
+    if (clientId !== null) {
+      try { await TcpSocket.disconnect({ client: clientId }); } catch (_) {}
+    }
+    return false;
+  }
+}
+
+
+async function buscarImpresora() {
   const btn    = document.getElementById('btn-buscar-impresora');
   const result = document.getElementById('config-printer-result');
   if (!result) return;
 
   btn.disabled = true;
-  result.innerHTML = `<div class="printer-spinner"><span class="spinner"></span> Buscando impresora…</div>`;
 
-  setTimeout(() => {
+  if (!isNative) {
+    setTimeout(() => {
+      btn.disabled = false;
+      result.innerHTML = `<div class="printer-result-msg">La búsqueda automática estará disponible cuando instales la app. Ingresa la IP manualmente.</div>`;
+    }, 1500);
+    result.innerHTML = `<div class="printer-spinner"><span class="spinner"></span> Buscando impresora en la red...</div>`;
+    return;
+  }
+
+  const setStatus = (msg) => {
+    result.innerHTML = `<div class="printer-spinner"><span class="spinner"></span> ${escapeHtml(msg)}</div>`;
+  };
+
+  const TcpSocket = window.Capacitor?.Plugins?.TcpSocket;
+  if (!TcpSocket) {
     btn.disabled = false;
-    result.innerHTML = `<div class="printer-result-msg">La búsqueda automática estará disponible cuando instales la app. Ingresa la IP manualmente.</div>`;
-  }, 1500);
+    result.innerHTML = `<div class="printer-result-msg error">Plugin TCP no disponible.</div>`;
+    return;
+  }
+
+  const localIP = await getLocalIP();
+  if (!localIP) {
+    btn.disabled = false;
+    result.innerHTML = `<div class="printer-result-msg">No se pudo detectar la red. Escribe la IP manualmente.</div>`;
+    return;
+  }
+  const prefix = localIP.split('.').slice(0, 3).join('.');
+
+  let encontradas = [];
+
+  // Paso 1 — ARP (rápido: solo dispositivos ya conocidos en la red)
+  setStatus('Revisando red local...');
+  try {
+    const arpResult = await TcpSocket.getArpTable();
+    const arpIPs = (arpResult.ips || []).filter(ip => ip.startsWith(prefix + '.'));
+    console.log('ARP candidatas:', arpIPs);
+    for (const ip of arpIPs) {
+      if (await probarIP(ip, 3000)) { encontradas.push(ip); }
+    }
+  } catch (e) {
+    console.log('Paso 1 (ARP) omitido:', e.message);
+  }
+
+  // Paso 2 — scanNetwork en Java (solo si ARP no encontró nada)
+  if (encontradas.length === 0) {
+    setStatus('Escaneando red completa...');
+    try {
+      const scanResult = await TcpSocket.scanNetwork({ prefix, port: 9100, timeout: 400 });
+      encontradas = scanResult.ips || [];
+      console.log('scanNetwork encontró:', encontradas);
+    } catch (e) {
+      console.log('Paso 2 (scanNetwork) falló:', e.message);
+    }
+  }
+
+  btn.disabled = false;
+
+  if (encontradas.length === 0) {
+    result.innerHTML = `<div class="printer-result-msg">No se encontró impresora en la red. Escribe la IP manualmente.</div>`;
+  } else if (encontradas.length === 1) {
+    const ip = encontradas[0];
+    result.innerHTML = `
+      <div class="printer-result-found">
+        <p>¿Es esta tu impresora? <strong>${escapeHtml(ip)}</strong></p>
+        <div class="printer-result-btns">
+          <button class="btn-printer-confirm" data-ip="${escapeHtml(ip)}" type="button">Sí, usar esta</button>
+          <button class="btn-printer-retry" type="button">Buscar otra vez</button>
+        </div>
+      </div>`;
+  } else {
+    const opciones = encontradas.map(ip =>
+      `<button class="btn-printer-confirm" data-ip="${escapeHtml(ip)}" type="button">${escapeHtml(ip)}</button>`
+    ).join('');
+    result.innerHTML = `
+      <div class="printer-result-found">
+        <p>Se encontraron varias impresoras. Elige una:</p>
+        <div class="printer-result-btns">${opciones}</div>
+      </div>`;
+  }
 }
 
 async function probarImpresora() {
@@ -1021,6 +1208,18 @@ function mostrarScreen(nombre) {
   document.getElementById(`screen-${nombre}`).classList.add('active');
 }
 
+/* ─── Cancelar comanda ───────────────────────────────────────── */
+function cancelarComanda(mesaId, idx) {
+  const mesa = getMesa(mesaId);
+  const comanda = mesa.historial[idx];
+  const num = comanda.comandaNum != null ? comanda.comandaNum : (idx + 1);
+  if (!confirm(`¿Cancelar comanda #${num}? Esta acción no se puede deshacer.`)) return;
+  comanda.cancelled = true;
+  saveState();
+  renderHistorial();
+  actualizarEnviadasBadge();
+}
+
 /* ─── Renderizado: historial ─────────────────────────────────── */
 function renderHistorial() {
   const cont = document.querySelector('.comanda-historial');
@@ -1040,8 +1239,9 @@ function renderHistorial() {
   }
 
   mesa.historial.forEach((comanda, idx) => {
+    const isCancelled = !!comanda.cancelled;
     const burbuja = document.createElement('div');
-    burbuja.className = 'burbuja';
+    burbuja.className = isCancelled ? 'burbuja cancelled' : 'burbuja';
     burbuja.dataset.idx = idx;
 
     const ticketHTML = renderTicketHTML(comanda.plates);
@@ -1049,19 +1249,23 @@ function renderHistorial() {
     const num = idx + 1;
     const allItems = comanda.plates.flatMap(p => p.items);
     const comandaTotal = allItems.reduce((s, i) => s + (i.unitPrice || 0) * i.qty, 0);
-    const totalHTML = comandaTotal > 0
+    const totalHTML = (!isCancelled && comandaTotal > 0)
       ? `<div class="burbuja-total">Total: $${comandaTotal}</div>`
       : '';
 
     burbuja.innerHTML = `
+      ${isCancelled ? '<div class="burbuja-cancelled-label">Cancelada</div>' : ''}
       <div class="burbuja-ticket">${ticketHTML}</div>
       ${totalHTML}
       <div class="burbuja-meta">
         <span class="burbuja-num">#${num}${comanda.sentAt ? ` · ${formatSentAtDisplay(comanda.sentAt)}` : ''}</span>
         <div class="burbuja-actions">
-          <button class="btn-imprimir" aria-label="Imprimir comanda">
+          ${!isCancelled ? `<button class="btn-imprimir" aria-label="Imprimir comanda">
             <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 6 2 18 2 18 9"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8"/></svg>
-          </button>
+          </button>` : ''}
+          ${!isCancelled ? `<button class="btn-cancelar" aria-label="Cancelar comanda">
+            <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+          </button>` : ''}
           <button class="btn-expand" data-open="false" aria-expanded="false" aria-label="Ver formato cocina">
             <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
             Cocina
@@ -1071,9 +1275,14 @@ function renderHistorial() {
       <div class="cocina-view">${cocinaHTML}</div>
     `;
 
-    burbuja.querySelector('.btn-imprimir').addEventListener('click', () => {
-      printTicket(formatTicket(comanda));
-    });
+    if (!isCancelled) {
+      burbuja.querySelector('.btn-imprimir').addEventListener('click', () => {
+        printTicket(formatTicket(comanda));
+      });
+      burbuja.querySelector('.btn-cancelar').addEventListener('click', () => {
+        cancelarComanda(state.currentMesa, idx);
+      });
+    }
 
     const btnExp    = burbuja.querySelector('.btn-expand');
     const cocinaView = burbuja.querySelector('.cocina-view');
@@ -1164,7 +1373,7 @@ function actualizarEnviadasBadge() {
   if (!badge) return;
 
   const mesa = getMesa(state.currentMesa);
-  const n = mesa.historial.length;
+  const n = mesa.historial.filter(c => !c.cancelled).length;
   if (n === 0) {
     badge.classList.add('empty');
   } else {
@@ -1238,6 +1447,7 @@ function buildDOM() {
       <div class="mesas-header">
         <h1>Comanda <span class="mesas-activas-badge" id="mesas-activas-badge"></span></h1>
         <div class="mesas-header-actions">
+          <button class="btn-config" id="btn-theme" aria-label="Cambiar tema"></button>
           <button class="btn-config" id="btn-resumen-dia" aria-label="Resumen del día">
             <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 6 2 18 2 18 9"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8"/></svg>
           </button>
@@ -1475,6 +1685,7 @@ function buildDOM() {
           <h2 class="config-section-title">Impresora</h2>
           <div class="config-printer-status empty" id="config-printer-status">Sin impresora configurada</div>
 
+          <div class="config-local-ip" id="config-local-ip"></div>
           <button class="btn-buscar-impresora" id="btn-buscar-impresora" type="button">
             <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24"
                  fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -1550,6 +1761,12 @@ function bindEvents() {
   // Delegación de eventos principal
   app.addEventListener('click', e => {
 
+    // Tema — ciclar
+    if (e.target.closest('#btn-theme')) {
+      ciclarTema();
+      return;
+    }
+
     // Resumen del día
     if (e.target.closest('#btn-resumen-dia')) {
       imprimirResumenDia();
@@ -1576,6 +1793,26 @@ function bindEvents() {
 
     // Impresora — buscar
     if (e.target.closest('#btn-buscar-impresora')) {
+      buscarImpresora();
+      return;
+    }
+
+    // Impresora — confirmar IP del escaneo
+    const confirmBtn = e.target.closest('.btn-printer-confirm');
+    if (confirmBtn) {
+      const ip = confirmBtn.dataset.ip;
+      const ipInput = document.getElementById('input-printer-ip');
+      if (ipInput) ipInput.value = ip;
+      config.printer.ip = ip;
+      saveConfig();
+      actualizarPrinterStatus();
+      const result = document.getElementById('config-printer-result');
+      if (result) result.innerHTML = `<div class="printer-result-msg success">IP guardada: ${escapeHtml(ip)} ✓</div>`;
+      return;
+    }
+
+    // Impresora — buscar otra vez
+    if (e.target.closest('.btn-printer-retry')) {
       buscarImpresora();
       return;
     }
@@ -1744,6 +1981,8 @@ function init() {
   renderModifierRow();
   bindEvents();
   applyKeyboardSize();
+  applyTheme();
+  actualizarBtnTheme();
   renderMesas();
 }
 

@@ -131,8 +131,9 @@ Vocabulario mínimo necesario para el ticket:
 | Alinear a la izquierda | `0x1B 0x61 0x00` |
 | Salto de línea | `0x0A` |
 | Corte de papel (parcial) | `0x1D 0x56 0x42 0x00` |
+| Seleccionar codepage PC858 | `0x1B 0x74 0x13` |
 
-El texto se codifica en bytes con `TextEncoder` (UTF-8). La mayoría de las impresoras térmicas de red soportan UTF-8 o Latin-1; si los acentos no salen bien, cambiar a `latin1` con una tabla de conversión simple.
+El texto se codifica en bytes con la función `encodePC858()` (ver sección 13). El comando de selección de codepage se envía una sola vez al inicio del ticket, inmediatamente después de `ESC @` y antes de cualquier texto.
 
 ### 6.3 Formato del ticket
 
@@ -171,24 +172,28 @@ El timeout de conexión debe ser corto: 3 segundos. Si la impresora no responde 
 
 ## 7. Buscar en mi red — implementación real
 
-Reemplaza el placeholder actual. Requiere el plugin TCP y solo funciona en el APK (`isNative === true`).
+Implementado. Requiere el plugin TCP y solo funciona en el APK (`isNative === true`). En el navegador sigue mostrando el mensaje de placeholder.
 
-### Flujo
+### Flujo implementado
 
-1. Obtener la IP local del dispositivo via `@capacitor/network` o mediante una conexión de prueba al gateway.
-2. Derivar el rango: si el celular es `192.168.1.105`, escanear `192.168.1.1` a `192.168.1.254`.
-3. Intentar conectar a cada IP en el puerto 9100 en paralelo, con timeout de 500ms por intento.
-4. Agrupar las IPs que respondan.
+1. **Obtener IP local** — `getLocalIP()` crea un `RTCPeerConnection` sin STUN servers y extrae la IP del dispositivo desde el primer ICE candidate local. Timeout de 5 segundos; si no se obtiene IP, muestra "No se pudo detectar la red. Escribe la IP manualmente."
+
+2. **Derivar el rango** — del prefijo `/24`: si el celular es `192.168.1.105`, genera el arreglo `192.168.1.1` … `192.168.1.254` (254 IPs).
+
+3. **Escanear en lotes de 50** — `Promise.all` sobre cada lote llama a `escanearIP(TcpSocket, ip)` por cada dirección. Los lotes se procesan secuencialmente; dentro de cada lote los 50 intentos corren en paralelo.
+
+4. **Verificación ESC/POS en la misma conexión** — `escanearIP()` no solo abre el socket: sobre la misma conexión ejecuta dos pasos antes de reportar un resultado positivo:
+   - **Paso A** — envía `ESC @` (`0x1B 0x40`): inicializa la impresora. Si la conexión se cierra, la IP se descarta.
+   - **Paso B** — envía `DLE EOT 1` (`0x10 0x04 0x01`): solicita el byte de estado del dispositivo. Espera exactamente 1 byte de respuesta con timeout de 1 segundo. Solo si llega ese byte la IP se confirma como impresora ESC/POS real.
+   - Las IPs que responden en el puerto 9100 pero no superan la verificación (otros dispositivos con ese puerto abierto) se descartan silenciosamente.
 
 ### Manejo de resultados
 
-- **Una IP responde** → "¿Es esta tu impresora? `192.168.1.42`" con botones [Sí, usar esta] / [Buscar otra vez].
-- **Varias IPs responden** → lista de opciones para que el taquero elija.
-- **Ninguna responde** → "No se encontró impresora en la red. Escribe la IP manualmente."
+- **Una IP verificada** → "¿Es esta tu impresora? `192.168.1.42`" con botones [Sí, usar esta] y [Buscar otra vez]. Al confirmar, la IP se guarda en `config.printer.ip` y se actualiza el estado visible de la sección de impresora.
+- **Varias IPs verificadas** → lista de botones, uno por IP. Al tocar una se guarda igual que el caso anterior.
+- **Ninguna verificada** → "No se encontró impresora en la red. Escribe la IP manualmente."
 
-El escaneo de 254 IPs en paralelo con timeout de 500ms tarda típicamente 1–3 segundos en una red local. Mostrar spinner con "Buscando impresora…" durante ese tiempo.
-
-En el navegador (`isNative === false`), el botón "Buscar en mi red" sigue mostrando el mensaje de placeholder actual — no cambia.
+El spinner "Buscando impresora en la red..." permanece durante todo el proceso. El tiempo típico es 2–4 segundos en una red doméstica (500ms de timeout por conexión fallida, más ~1s de verificación por candidato encontrado).
 
 ## 8. Probar conexión — implementación real
 
@@ -270,7 +275,8 @@ Requiere firmar con un keystore propio. No es necesario para sideloading — el 
 - [x] Impresión exitosa desde el APK: el ticket sale en la impresora con el formato definido.
 - [x] Toast de error si la impresora no responde.
 - [x] Toast informativo si se intenta imprimir desde el navegador.
-- [ ] "Buscar en mi red" implementado con escaneo TCP real en el APK.
+- [x] "Buscar en mi red" implementado con escaneo TCP real en el APK.
+- [x] Verificación ESC/POS de impresoras encontradas en el escaneo (ESC @ + DLE EOT 1, misma conexión).
 - [ ] "Probar conexión" implementado con handshake TCP real en el APK.
 - [x] APK de debug generado e instalable por sideloading.
 - [x] El estado en localStorage se conserva tras actualizar la app.
@@ -311,8 +317,142 @@ configurations.all {
 
 El script `build-apk.sh` en la raíz del proyecto automatiza los pasos 1 y 2.
 
+### index.html de redirect en la raíz del repo
+
+Al mover los archivos web a `www/`, GitHub Pages dejó de funcionar (esperaba `index.html` en la raíz). Se agregó un `index.html` mínimo en la raíz que redirige a `www/index.html` con `<meta http-equiv="refresh">`. Este archivo no se copia a Windows durante el build — `build-apk.sh` solo sincroniza los contenidos de `www/`.
+
 ### Pendiente para la próxima sesión
 
-- **"Buscar en mi red"** — escaneo TCP del rango local (sección 7). Requiere obtener la IP del dispositivo y paralelizar conexiones de prueba al puerto 9100 con timeout de 500ms.
 - **"Probar conexión"** — actualmente solo hace handshake TCP (conecta y desconecta). Evaluar si conviene enviar también un ticket de prueba mínimo para confirmar ESC/POS además de TCP.
 - **Verificar modificadores en el ticket impreso** — confirmar que el formato `  Nx Nombre  MOD1  MOD2` sale correctamente en papel con la impresora real.
+
+## 13. Funcionalidades agregadas fuera del scope original de fase3.md
+
+Estas funcionalidades se implementaron durante las sesiones de Fase 3 y no estaban en el spec inicial.
+
+### Resumen del día
+
+Botón de impresora en el encabezado de la pantalla de Mesas, visible solo cuando hay una IP de impresora configurada. Al tocarlo, genera e imprime un ticket ESC/POS de 48 chars que agrupa todas las comandas enviadas hoy por mesa (en orden numérico, luego PR, PE, PA) con número de comanda, total por comanda, subtotal por mesa y total global del día. Si no hay comandas hoy, muestra toast "Sin comandas hoy". Solo funciona en el APK (misma condición que el resto de la impresión).
+
+### Número de comanda correlativo global
+
+Cada comanda enviada recibe un campo `comandaNum` — un entero correlativo que persiste en `localStorage` bajo la clave `config.lastComandaNum`. El contador no se reinicia al cerrar la app. Las comandas antiguas sin este campo aparecen con número "—" en el resumen del día.
+
+### Timestamp sentAt en ISO 8601
+
+El campo `sentAt` de cada comanda cambió de formato `"HH:MM"` a ISO 8601 (`new Date().toISOString()`). Las burbujas del historial y el ticket impreso muestran solo la hora local (HH:MM) derivada del timestamp. Las comandas antiguas en `localStorage` con el formato viejo siguen funcionando — se muestran tal cual al no poder parsearse como fecha.
+
+### Precios por producto
+
+Se agregó un campo `price` (número, default 0) a cada entrada del catálogo de tacos y bebidas. Al capturar un producto, su precio unitario se guarda en el item como `unitPrice`. El total de cada comanda se calcula al renderizar (no se guarda). Si algún item tiene precio, la burbuja del historial muestra el total al pie y el ticket impreso incluye una columna de precios alineada a la derecha.
+
+### Control de tamaño del teclado
+
+Selector de tres opciones en la sección Mesero de Configuración (Normal / Grande / Muy grande). Persiste en `config.keyboardSize`. Al guardar, aplica una clase CSS al contenedor del teclado (`teclado--large` o `teclado--xlarge`) que ajusta height y font-size de las teclas.
+
+### Cancelación de comandas
+
+Botón X en el pie de cada burbuja del historial, junto al botón "Cocina". Al tocarlo muestra `confirm()` nativo: "¿Cancelar comanda #N? Esta acción no se puede deshacer." Si confirma, agrega `cancelled: true` al objeto de comanda en `localStorage`. La comanda no se elimina — queda visible con `opacity: 0.45`, el texto del ticket tachado y una etiqueta roja "Cancelada" arriba a la derecha. Los botones de imprimir y cancelar desaparecen de la burbuja cancelada. El contador de "N enviadas" en la tarjeta de mesa solo cuenta comandas activas. En el resumen del día, las comandas canceladas aparecen marcadas como `CANCELADA` pero su monto no se suma al subtotal ni al total global.
+
+### Modo claro/oscuro
+
+Botón de tres estados en el encabezado de la pantalla de Mesas, a la izquierda del botón de resumen. Cicla en orden: `auto → light → dark → auto`. El ícono cambia con el estado: monitor (auto), sol (light), luna (dark). El estado persiste en `config.theme` en `localStorage`.
+
+- **auto**: sigue `prefers-color-scheme` del sistema via `@media (prefers-color-scheme: light) { :root:not(.theme-dark) { ... } }` — no requiere JS para el render inicial.
+- **light**: fuerza modo claro añadiendo la clase `.theme-light` a `<html>`.
+- **dark**: fuerza modo oscuro añadiendo la clase `.theme-dark` a `<html>`, lo que excluye la media query de auto.
+
+Para evitar flash al recargar, `www/index.html` tiene un script inline síncrono en `<head>` (antes del `<link rel="stylesheet">`) que lee `config.theme` de `localStorage` y aplica la clase antes de que el CSS sea evaluado por primera vez.
+
+**Paleta de modo claro** (variables bajo `:root.theme-light` y `@media (prefers-color-scheme: light)`):
+
+| Variable | Valor |
+|---|---|
+| `--bg` | `oklch(0.97 0.003 247)` |
+| `--surface` | `oklch(0.93 0.006 247)` |
+| `--surface-2` | `oklch(0.85 0.010 247)` |
+| `--surface-3` | `oklch(0.78 0.014 247)` |
+| `--ink` | `oklch(0.15 0.010 247)` |
+| `--ink-muted` | `oklch(0.45 0.010 247)` |
+| `--primary` | `oklch(0.45 0.170 247)` |
+| `--primary-hover` | `oklch(0.37 0.160 247)` |
+| `--primary-fg` | `oklch(0.97 0.005 247)` |
+| `--accent` | `oklch(0.48 0.200 65)` |
+| `--accent-fg` | `oklch(0.97 0.010 78)` |
+| `--error` | `oklch(0.48 0.220 25)` |
+| `--error-muted` | `oklch(0.92 0.030 25)` |
+| `--success` | `oklch(0.45 0.180 145)` |
+| `--bg-outer` | `oklch(0.88 0.006 247)` |
+
+La paleta oscura (default en `:root`) no cambia.
+
+### Búsqueda real de impresoras en red
+
+Implementada en la función `buscarImpresora()` de `www/app.js`. Solo activa en el APK (`isNative === true`); en el navegador sigue mostrando el mensaje de placeholder.
+
+**Obtener IP local**: `getLocalIP()` usa `RTCPeerConnection` con lista de STUN servers vacía. Al crear un data channel y generar una oferta SDP, el navegador genera ICE candidates locales que incluyen la IP del dispositivo en la red. No requiere internet ni plugins adicionales; funciona en el WebView de Capacitor/Android. Timeout de 5 segundos como fallback; si no llega ningún candidate válido (no `169.254.x.x`), se muestra el mensaje de IP manual.
+
+**Escaneo**: `escanearIP(TcpSocket, ip)` combina el intento de conexión y la verificación ESC/POS en una sola función, sobre la misma conexión:
+1. `TcpSocket.connect({ ipAddress: ip, port: 9100 })` con timeout de 500ms via `Promise.race`.
+2. `TcpSocket.send({ client, data: btoa('\x1b\x40'), encoding: 'base64' })` — ESC @ (init).
+3. `TcpSocket.send({ client, data: btoa('\x10\x04\x01'), encoding: 'base64' })` — DLE EOT 1 (status request).
+4. `TcpSocket.read({ client, expectLen: 1, timeout: 1, encoding: 'base64' })` con timeout adicional de 1200ms via `Promise.race` — espera el byte de respuesta.
+5. `TcpSocket.disconnect({ client })` en cualquier rama (éxito o error).
+
+Devuelve la IP si recibió respuesta al status request; `null` en cualquier otro caso.
+
+**Lotes**: el loop principal corre `Promise.all` sobre grupos de 50 IPs, iterando los 6 lotes de forma secuencial. Esto evita abrir 254 sockets simultáneos (que podría saturar el sistema) sin aumentar demasiado el tiempo total.
+
+**Resultados**: al terminar el escaneo, el UI muestra botones de confirmación para cada IP verificada. Al confirmar, la IP se guarda en `config.printer.ip`, se llama `saveConfig()` y se llama `actualizarPrinterStatus()` para reflejar el cambio sin necesidad de guardar la configuración completa.
+
+### Corrección de acentos con codepage PC858
+
+Las impresoras térmicas ESC/POS no reciben UTF-8 por defecto — usan páginas de códigos heredadas. Sin activar la página correcta, los caracteres fuera de ASCII (á, é, ñ, etc.) se imprimen como símbolos incorrectos.
+
+**Solución implementada** en `formatTicket()` de `www/app.js`:
+
+1. **Activar codepage al inicio del ticket**: el byte sequence `[0x1B, 0x74, 0x13]` (ESC t 19) se emite inmediatamente después de `ESC @` y antes de cualquier texto. Esto selecciona la página de códigos PC858 en la impresora, que cubre los caracteres del español y el símbolo `€`.
+
+2. **Función `encodePC858(str)`**: reemplaza `TextEncoder` dentro de `formatTicket`. Convierte cada carácter del string: los ASCII estándar (0x00–0x7F) se pasan con su código directo; los caracteres especiales del español se mapean según esta tabla:
+
+| Char | Byte PC858 | Char | Byte PC858 |
+|------|-----------|------|-----------|
+| á | 0xA0 | Á | 0x41 |
+| é | 0x82 | É | 0x90 |
+| í | 0xA1 | Í | 0xD6 |
+| ó | 0xA2 | Ó | 0xE0 |
+| ú | 0xA3 | Ú | 0xE9 |
+| ñ | 0xA4 | Ñ | 0xA5 |
+| ü | 0x81 | Ü | 0x9A |
+| ¡ | 0xAD | ¿ | 0xA8 |
+| € | 0xD5 | | |
+
+Cualquier otro carácter fuera de ASCII que no esté en la tabla se sustituye por `?` (0x3F). `formatResumenDia()` no fue modificada — sigue usando `TextEncoder` ya que su corrección queda pendiente.
+
+### Notas de implementación — Descubrimiento de impresoras
+
+#### Problema raíz: plugin TCP bloqueante en el bridge de Capacitor
+
+El plugin `capacitor-tcp-socket` original implementa `connect()` con `new Socket(ipAddress, port)` — una llamada bloqueante sin timeout que corre en el hilo del bridge de Capacitor. Cada llamada JS→Java espera una respuesta antes de que la siguiente pueda ejecutarse. Con 254 IPs a barrer secuencialmente, esto hace imposible completar un escaneo en tiempo razonable: las IPs que no responden bloquean el hilo durante segundos cada una.
+
+Intentos intermedios de resolver el problema (batches paralelos con `Promise.race`, thread pools en Java, bindings a interfaz WiFi) no funcionaron porque el bloqueo ocurre en el bridge nativo antes de llegar al código Java del plugin.
+
+#### Solución: scanNetwork() y getArpTable() como métodos nativos en Java
+
+Se agregaron dos métodos nuevos a `TcpSocketPlugin.java` que mueven toda la lógica de red al lado Java, cruzando el bridge solo una vez:
+
+**`getArpTable()`** — Lee `/proc/net/arp` directamente en Java. Devuelve las IPs con estado `0x2` (entrada ARP completa/activa) en interfaz `wlan*`. Si la impresora fue usada recientemente, estará en la tabla ARP y se encuentra en milisegundos sin abrir ningún socket. No requiere permisos adicionales.
+
+**`scanNetwork(prefix, port, timeout)`** — Abre 254 conexiones TCP simultáneas en un `FixedThreadPool(50)`, con `CountDownLatch` para sincronizar. Timeout configurable por conexión (default 400ms). Cruza el bridge una sola vez al inicio y una sola vez al devolver resultados. Tiempo típico: 1–3 segundos para un /24 completo.
+
+El flujo de `buscarImpresora()` en cascada:
+1. `getArpTable()` → filtra por prefijo de red → `probarIP()` a candidatas. Resultado inmediato si la impresora está en caché ARP.
+2. Si ARP no encuentra nada → `scanNetwork()` → devuelve todas las IPs que responden en puerto 9100.
+
+#### Sincronización del Java parcheado a Windows
+
+El proyecto compila en Android Studio desde Windows (`C:\Users\gi\proyectos\comanda-taqueria\node_modules\capacitor-tcp-socket\android`). El parche aplicado por `patch-package` modifica el Java en WSL (`/home/gi/proyectos/...`) pero no en Windows. `build-apk.sh` fue actualizado para copiar el Java parcheado a Windows en cada ejecución, garantizando que Android Studio siempre compile la versión correcta.
+
+#### getWifiNetwork() eliminado
+
+Se intentó forzar el ruteo via WiFi usando `ConnectivityManager.getAllNetworks()` para evitar que Android usara datos móviles en el escaneo. El método fue eliminado porque `ConnectivityManager.getAllNetworks()` requiere el permiso `ACCESS_NETWORK_STATE` declarado en `AndroidManifest.xml`, y su ausencia causaba un crash en "Probar conexión". El método nunca demostró resolver el problema de descubrimiento, y `scanNetwork()` opera directamente sobre la red sin necesitar binding explícito a una interfaz.

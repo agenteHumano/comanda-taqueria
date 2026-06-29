@@ -1,0 +1,326 @@
+diff --git a/node_modules/capacitor-tcp-socket/android/src/main/java/com/svend/plugins/tcp/socket/TcpSocketPlugin.java b/node_modules/capacitor-tcp-socket/android/src/main/java/com/svend/plugins/tcp/socket/TcpSocketPlugin.java
+index 45cff47..18e29f0 100644
+--- a/node_modules/capacitor-tcp-socket/android/src/main/java/com/svend/plugins/tcp/socket/TcpSocketPlugin.java
++++ b/node_modules/capacitor-tcp-socket/android/src/main/java/com/svend/plugins/tcp/socket/TcpSocketPlugin.java
+@@ -1,6 +1,7 @@
+ package com.svend.plugins.tcp.socket;
+ 
+ import android.Manifest;
++import android.util.Base64;
+ import android.util.Log;
+ import com.getcapacitor.JSObject;
+ import com.getcapacitor.Plugin;
+@@ -8,16 +9,29 @@ import com.getcapacitor.PluginCall;
+ import com.getcapacitor.PluginMethod;
+ import com.getcapacitor.annotation.CapacitorPlugin;
+ import com.getcapacitor.annotation.Permission;
++import com.getcapacitor.JSArray;
+ import java.io.BufferedOutputStream;
++import java.io.BufferedReader;
+ import java.io.DataOutputStream;
++import java.io.FileReader;
+ import java.io.IOException;
+ import java.io.InputStream;
++import java.net.Inet4Address;
++import java.net.InetAddress;
++import java.net.InetSocketAddress;
+ import java.net.Socket;
+ import java.net.SocketTimeoutException;
+ import java.util.ArrayList;
++import java.util.Collections;
+ import java.util.List;
++import java.util.Map;
++import java.util.concurrent.ConcurrentHashMap;
++import java.util.concurrent.CountDownLatch;
++import java.util.concurrent.ExecutorService;
++import java.util.concurrent.Executors;
++import java.util.concurrent.TimeUnit;
++import java.util.concurrent.atomic.AtomicInteger;
+ import java.nio.charset.StandardCharsets;
+-import android.util.Base64;
+ 
+ /**
+  * TcpSocketPlugin - Capacitor plugin that provides TCP Socket communication functionality
+@@ -30,7 +44,9 @@ import android.util.Base64;
+ public class TcpSocketPlugin extends Plugin {
+     private static final String TAG = "TcpSocketPlugin";
+     public static final String READ_EOF_ERROR_CODE = "EOF";
+-    private List<Socket> clients = new ArrayList<>();
++    private final ExecutorService connectPool = Executors.newCachedThreadPool();
++    private final AtomicInteger clientIdSeq = new AtomicInteger(0);
++    private final Map<Integer, Socket> clients = new ConcurrentHashMap<>();
+ 
+     // Supported data encoding types
+     private enum DataEncoding {
+@@ -54,47 +70,42 @@ public class TcpSocketPlugin extends Plugin {
+                     return encoding;
+                 }
+             }
+-            return UTF8; // Default to UTF8 if not found
++            return UTF8;
+         }
+     }
+ 
+     /**
+-     * Connect to TCP server
++     * Connect to TCP server (non-blocking: runs on connectPool thread)
+      * Parameters:
+      * - ipAddress: Server IP address (required)
+      * - port: Server port, default 9100
+-     * Returns:
+-     * - client: Client index, used for subsequent operations
++     * - connectTimeout: Connection timeout in ms, default 5000
+      */
+     @PluginMethod
+-    public void connect(PluginCall call) {
+-        String ipAddress = call.getString("ipAddress");
+-
+-        if (ipAddress == null || ipAddress.isEmpty()) {
+-            call.reject("IP address is required");
+-            return;
+-        }
+-        Integer port = call.getInt("port", 9100);
+-
+-        try {
+-            Socket socket = new Socket(ipAddress, port);
+-            clients.add(socket);
++    public void connect(final PluginCall call) {
++        final String ipAddress = call.getString("ipAddress");
++        final int port = call.getInt("port", 9100);
++        final int timeout = call.getInt("connectTimeout", 5000); // default 5000ms
+ 
+-            JSObject ret = new JSObject();
+-            ret.put("client", clients.size() - 1);
+-            call.resolve(ret);
+-        } catch (IOException e) {
+-            Log.e(TAG, "Connection failed: " + e.getMessage());
+-            call.reject("Connection failed: " + e.getMessage());
+-        }
++        connectPool.execute(() -> {
++            Socket socket = new Socket();
++            try {
++                InetAddress addr = Inet4Address.getByName(ipAddress);
++                socket.connect(new InetSocketAddress(addr, port), timeout);
++                int id = clientIdSeq.getAndIncrement();
++                clients.put(id, socket);
++                JSObject ret = new JSObject();
++                ret.put("client", id);
++                call.resolve(ret);
++            } catch (IOException e) {
++                try { socket.close(); } catch (IOException ignored) {}
++                call.reject("connect failed: " + e.getMessage());
++            }
++        });
+     }
+ 
+     /**
+      * Send data to server with specified encoding
+-     * Parameters:
+-     * - client: Client index
+-     * - data: Data to send
+-     * - encoding: Data encoding (utf8, base64, hex), default is utf8
+      */
+     @PluginMethod
+     public void send(final PluginCall call) {
+@@ -105,7 +116,7 @@ public class TcpSocketPlugin extends Plugin {
+             return;
+         }
+ 
+-        if (clientIndex >= clients.size() || clientIndex < 0) {
++        if (!clients.containsKey(clientIndex)) {
+             call.reject("Client index out of range");
+             return;
+         }
+@@ -133,7 +144,6 @@ public class TcpSocketPlugin extends Plugin {
+                     final Socket socket = clients.get(clientIndex);
+                     DataOutputStream bufferOut = new DataOutputStream(new BufferedOutputStream(socket.getOutputStream()));
+ 
+-                    // Convert and send data according to the specified encoding
+                     byte[] bytes;
+                     switch (encoding) {
+                         case BASE64:
+@@ -168,14 +178,6 @@ public class TcpSocketPlugin extends Plugin {
+ 
+     /**
+      * Read data from server
+-     * Parameters:
+-     * - client: Client index
+-     * - expectLen: Expected number of bytes to read, default 1024
+-     * - timeout: Read timeout in seconds, default 10
+-     * - encoding: Preferred encoding for returned data (utf8, base64, hex), default is utf8
+-     * Returns:
+-     * - result: Data read
+-     * - encoding: The encoding used for the result
+      */
+     @PluginMethod
+     public void read(final PluginCall call) {
+@@ -188,7 +190,7 @@ public class TcpSocketPlugin extends Plugin {
+             return;
+         }
+ 
+-        if (clientIndex >= clients.size() || clientIndex < 0) {
++        if (!clients.containsKey(clientIndex)) {
+             call.reject("Client index out of range");
+             return;
+         }
+@@ -265,10 +267,6 @@ public class TcpSocketPlugin extends Plugin {
+ 
+     /**
+      * Disconnect from server
+-     * Parameters:
+-     * - client: Client index
+-     * Returns:
+-     * - client: Disconnected client index
+      */
+     @PluginMethod
+     public void disconnect(PluginCall call) {
+@@ -278,23 +276,13 @@ public class TcpSocketPlugin extends Plugin {
+             return;
+         }
+ 
+-        if (clients.isEmpty()) {
+-            call.reject("No active connections");
+-            return;
+-        }
+-        
+-        if (clientIndex >= clients.size() || clientIndex < 0) {
++        if (!clients.containsKey(clientIndex)) {
+             call.reject("Client index out of range");
+             return;
+         }
+ 
+         final Socket socket = clients.get(clientIndex);
+         try {
+-            if (!socket.isConnected()) {
+-                socket.close();
+-                call.reject("Socket not connected");
+-                return;
+-            }
+             socket.close();
+         } catch (IOException e) {
+             Log.e(TAG, "Disconnect failed: " + e.getMessage());
+@@ -302,14 +290,70 @@ public class TcpSocketPlugin extends Plugin {
+             return;
+         }
+ 
++        clients.remove(clientIndex);
+         JSObject ret = new JSObject();
+         ret.put("client", clientIndex);
+         call.resolve(ret);
+     }
+ 
+-    /**
+-     * Helper method to safely close a socket and handle any exceptions
+-     */
++    @PluginMethod
++    public void getArpTable(final PluginCall call) {
++        try {
++            BufferedReader br = new BufferedReader(new FileReader("/proc/net/arp"));
++            String line;
++            JSArray ips = new JSArray();
++            br.readLine(); // saltar header
++            while ((line = br.readLine()) != null) {
++                String[] parts = line.trim().split("\\s+");
++                if (parts.length >= 6 && parts[2].equals("0x2") && parts[5].startsWith("wlan")) {
++                    ips.put(parts[0]);
++                }
++            }
++            br.close();
++            JSObject ret = new JSObject();
++            ret.put("ips", ips);
++            call.resolve(ret);
++        } catch (Exception e) {
++            call.reject("arp failed: " + e.getMessage());
++        }
++    }
++
++    @PluginMethod
++    public void scanNetwork(final PluginCall call) {
++        final String prefix = call.getString("prefix");
++        final int port = call.getInt("port", 9100);
++        final int timeout = call.getInt("timeout", 400);
++
++        ExecutorService pool = Executors.newFixedThreadPool(50);
++        List<String> found = Collections.synchronizedList(new ArrayList<>());
++        CountDownLatch latch = new CountDownLatch(254);
++
++        for (int i = 1; i <= 254; i++) {
++            final String ip = prefix + "." + i;
++            pool.submit(() -> {
++                try {
++                    Socket s = new Socket();
++                    s.connect(new InetSocketAddress(ip, port), timeout);
++                    s.close();
++                    found.add(ip);
++                } catch (IOException ignored) {
++                } finally {
++                    latch.countDown();
++                }
++            });
++        }
++
++        pool.execute(() -> {
++            try { latch.await(10, TimeUnit.SECONDS); } catch (InterruptedException ignored) {}
++            pool.shutdownNow();
++            JSArray result = new JSArray();
++            for (String ip : found) result.put(ip);
++            JSObject ret = new JSObject();
++            ret.put("ips", result);
++            call.resolve(ret);
++        });
++    }
++
+     private void closeSocketSafely(Socket socket) {
+         if (socket != null) {
+             try {
+@@ -320,36 +364,24 @@ public class TcpSocketPlugin extends Plugin {
+         }
+     }
+ 
+-    /**
+-     * Clean up resources when plugin is destroyed
+-     */
+     @Override
+     protected void handleOnDestroy() {
+-        for (Socket socket : clients) {
++        connectPool.shutdownNow();
++        for (Socket socket : clients.values()) {
+             closeSocketSafely(socket);
+         }
+         clients.clear();
+         super.handleOnDestroy();
+     }
+ 
+-    /**
+-     * Convert hex string to bytes
+-     * @param hex Hex string to convert
+-     * @return Byte array or null if invalid hex string
+-     */
+     private byte[] hexStringToBytes(String hex) {
+-        // Remove 0x prefix, spaces, newlines, etc.
+         String cleanHex = hex.replace("0x", "")
+                              .replace(" ", "")
+                              .replace("\n", "");
+-                             
+         if (cleanHex.length() % 2 != 0) {
+-            // Invalid hex string
+             return null;
+         }
+-        
+         byte[] data = new byte[cleanHex.length() / 2];
+-        
+         try {
+             for (int i = 0; i < cleanHex.length(); i += 2) {
+                 data[i / 2] = (byte) Integer.parseInt(cleanHex.substring(i, i + 2), 16);
+@@ -361,11 +393,6 @@ public class TcpSocketPlugin extends Plugin {
+         }
+     }
+ 
+-    /**
+-     * Convert bytes to hex string
+-     * @param bytes Byte array to convert
+-     * @return Hex string representation
+-     */
+     private String bytesToHexString(byte[] bytes) {
+         StringBuilder sb = new StringBuilder();
+         for (byte b : bytes) {

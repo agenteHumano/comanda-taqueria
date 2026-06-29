@@ -6,7 +6,8 @@
     "doc": "docs"
   },
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "postinstall": "patch-package"
   },
   "keywords": [],
   "author": "",
@@ -17,5 +18,8 @@
     "@capacitor/cli": "^7.6.7",
     "@capacitor/core": "^8.4.1",
     "capacitor-tcp-socket": "^7.1.1"
+  },
+  "devDependencies": {
+    "patch-package": "^8.0.1"
   }
 }

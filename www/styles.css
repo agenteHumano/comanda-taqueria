@@ -21,6 +21,7 @@
   --error-fg:        oklch(0.97 0.005   0);
   --error-muted:     oklch(0.22 0.060  25);
   --success:         oklch(0.68 0.180 145);
+  --bg-outer:        oklch(0.06 0.000   0);
 
   /* Spacing — 4pt base */
   --space-1:  4px;
@@ -63,6 +64,57 @@
   --dur-fast: 100ms;
   --dur-base: 180ms;
   --dur-slow: 280ms;
+}
+
+/* ─── Light palette ─────────────────────────────────────────── */
+:root.theme-light {
+  --bg:              oklch(0.97 0.003 247);
+  --surface:         oklch(0.93 0.006 247);
+  --surface-2:       oklch(0.85 0.010 247);
+  --surface-3:       oklch(0.78 0.014 247);
+  --ink:             oklch(0.15 0.010 247);
+  --ink-muted:       oklch(0.45 0.010 247);
+  --primary:         oklch(0.45 0.170 247);
+  --primary-hover:   oklch(0.37 0.160 247);
+  --primary-fg:      oklch(0.97 0.005 247);
+  --primary-a10:     oklch(0.45 0.170 247 / 0.10);
+  --primary-a12:     oklch(0.45 0.170 247 / 0.12);
+  --primary-a18:     oklch(0.45 0.170 247 / 0.18);
+  --primary-a60:     oklch(0.45 0.170 247 / 0.60);
+  --accent:          oklch(0.48 0.200  65);
+  --accent-fg:       oklch(0.97 0.010  78);
+  --accent-a18:      oklch(0.48 0.200  65 / 0.18);
+  --error:           oklch(0.48 0.220  25);
+  --error-fg:        oklch(0.97 0.005   0);
+  --error-muted:     oklch(0.92 0.030  25);
+  --success:         oklch(0.45 0.180 145);
+  --bg-outer:        oklch(0.88 0.006 247);
+}
+
+@media (prefers-color-scheme: light) {
+  :root:not(.theme-dark) {
+    --bg:              oklch(0.97 0.003 247);
+    --surface:         oklch(0.93 0.006 247);
+    --surface-2:       oklch(0.85 0.010 247);
+    --surface-3:       oklch(0.78 0.014 247);
+    --ink:             oklch(0.15 0.010 247);
+    --ink-muted:       oklch(0.45 0.010 247);
+    --primary:         oklch(0.45 0.170 247);
+    --primary-hover:   oklch(0.37 0.160 247);
+    --primary-fg:      oklch(0.97 0.005 247);
+    --primary-a10:     oklch(0.45 0.170 247 / 0.10);
+    --primary-a12:     oklch(0.45 0.170 247 / 0.12);
+    --primary-a18:     oklch(0.45 0.170 247 / 0.18);
+    --primary-a60:     oklch(0.45 0.170 247 / 0.60);
+    --accent:          oklch(0.48 0.200  65);
+    --accent-fg:       oklch(0.97 0.010  78);
+    --accent-a18:      oklch(0.48 0.200  65 / 0.18);
+    --error:           oklch(0.48 0.220  25);
+    --error-fg:        oklch(0.97 0.005   0);
+    --error-muted:     oklch(0.92 0.030  25);
+    --success:         oklch(0.45 0.180 145);
+    --bg-outer:        oklch(0.88 0.006 247);
+  }
 }
 
 /* ─── Reset ──────────────────────────────────────────────────── */
@@ -123,7 +175,7 @@ input[type="number"]::-webkit-inner-spin-button { -webkit-appearance: none; }
     display: flex;
     align-items: flex-start;
     justify-content: center;
-    background: oklch(0.06 0.000 0);
+    background: var(--bg-outer);
   }
 }
 
@@ -568,6 +620,41 @@ input[type="number"]::-webkit-inner-spin-button { -webkit-appearance: none; }
 
 .cocina-plato + .cocina-plato {
   margin-top: var(--space-3);
+}
+
+/* Burbuja cancelada */
+.burbuja.cancelled {
+  opacity: 0.45;
+}
+
+.burbuja.cancelled .burbuja-ticket {
+  text-decoration: line-through;
+}
+
+.burbuja-cancelled-label {
+  font-size: var(--text-xs);
+  font-weight: 700;
+  color: var(--error);
+  text-align: right;
+  margin-bottom: var(--space-1);
+}
+
+.btn-cancelar {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 44px;
+  min-height: 44px;
+  padding: 2px var(--space-2);
+  border-radius: var(--radius-sm);
+  background: var(--surface-2);
+  color: var(--ink-muted);
+  transition: background var(--dur-fast);
+}
+
+.btn-cancelar:active {
+  background: var(--error-muted);
+  color: var(--error);
 }
 
 /* ─── Borrador / vista previa ────────────────────────────────── */
@@ -1163,6 +1250,13 @@ input[type="number"]::-webkit-inner-spin-button { -webkit-appearance: none; }
   font-weight: 400;
 }
 
+.config-local-ip {
+  font-size: var(--text-sm);
+  color: var(--ink-muted);
+  min-height: 1.2em;
+  margin-bottom: var(--space-1);
+}
+
 .btn-buscar-impresora {
   display: flex;
   align-items: center;
@@ -1237,6 +1331,47 @@ input[type="number"]::-webkit-inner-spin-button { -webkit-appearance: none; }
 .printer-result-msg.error {
   color: var(--error);
   background: var(--error-muted);
+}
+
+.printer-result-msg.success {
+  color: var(--success);
+}
+
+.printer-result-found {
+  padding: var(--space-2) var(--space-3);
+  background: var(--surface);
+  border-radius: var(--radius-sm);
+  line-height: 1.5;
+}
+
+.printer-result-found p {
+  margin: 0 0 var(--space-2);
+  color: var(--ink-muted);
+}
+
+.printer-result-btns {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+.btn-printer-confirm {
+  padding: var(--space-2) var(--space-3);
+  background: var(--primary);
+  color: var(--primary-fg);
+  border-radius: var(--radius-sm);
+  font-size: var(--text-sm);
+  font-weight: 600;
+  min-height: 44px;
+}
+
+.btn-printer-retry {
+  padding: var(--space-2) var(--space-3);
+  background: var(--surface-2);
+  color: var(--ink);
+  border-radius: var(--radius-sm);
+  font-size: var(--text-sm);
+  min-height: 44px;
 }
 
 /* Config footer */

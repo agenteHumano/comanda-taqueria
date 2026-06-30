@@ -465,13 +465,44 @@ function uint8ArrayToBase64(bytes) {
   return btoa(binary);
 }
 
+function encodePC858(str) {
+  const MAP = {
+    'á':0xA0,'é':0x82,'í':0xA1,'ó':0xA2,'ú':0xA3,'ñ':0xA4,
+    'Á':0x41,'É':0x90,'Í':0xD6,'Ó':0xE0,'Ú':0xE9,'Ñ':0xA5,
+    'ü':0x81,'Ü':0x9A,'¡':0xAD,'¿':0xA8,'€':0xD5,
+  };
+  const out = [];
+  for (const ch of str) {
+    if (ch.charCodeAt(0) < 0x80) out.push(ch.charCodeAt(0));
+    else if (MAP[ch] !== undefined) out.push(MAP[ch]);
+    else out.push(0x3F);
+  }
+  return out;
+}
+
+function stripAndEncodeASCII(str) {
+  const STRIP = {
+    'á':'a','é':'e','í':'i','ó':'o','ú':'u',
+    'Á':'A','É':'E','Í':'I','Ó':'O','Ú':'U',
+    'ñ':'n','Ñ':'N','ü':'u','Ü':'U','¡':'!','¿':'?','€':'E',
+  };
+  const out = [];
+  for (const ch of str) {
+    const mapped = STRIP[ch] ?? ch;
+    if (mapped.charCodeAt(0) < 0x80) out.push(mapped.charCodeAt(0));
+    else out.push(0x3F);
+  }
+  return out;
+}
+
 function formatTicket(comanda) {
+  const ENCODING = 'pc858'; // 'pc858' | 'strip'
   const WIDTH = 48;
-  const enc   = new TextEncoder();
   const ESC   = 0x1B;
   const GS    = 0x1D;
   const CMD   = {
     INIT:     [ESC, 0x40],
+    CODEPAGE: [ESC, 0x74, 0x13],
     BOLD_ON:  [ESC, 0x45, 0x01],
     BOLD_OFF: [ESC, 0x45, 0x00],
     CENTER:   [ESC, 0x61, 0x01],
@@ -480,11 +511,14 @@ function formatTicket(comanda) {
     CUT:      [GS, 0x56, 0x42, 0x00],
   };
 
+  const encode = ENCODING === 'pc858' ? encodePC858 : stripAndEncodeASCII;
+
   const parts = [];
   const cmd  = (c)   => parts.push(c);
-  const line = (str) => parts.push(Array.from(enc.encode(str)), CMD.LF);
+  const line = (str) => parts.push(encode(str), CMD.LF);
 
   cmd(CMD.INIT);
+  if (ENCODING === 'pc858') cmd(CMD.CODEPAGE);
   cmd(CMD.CENTER);
   line('='.repeat(WIDTH));
   cmd(CMD.BOLD_ON);

@@ -429,6 +429,13 @@ Las impresoras térmicas ESC/POS no reciben UTF-8 por defecto — usan páginas 
 
 Cualquier otro carácter fuera de ASCII que no esté en la tabla se sustituye por `?` (0x3F). `formatResumenDia()` no fue modificada — sigue usando `TextEncoder` ya que su corrección queda pendiente.
 
+**Flag `ENCODING`**: al inicio de `formatTicket()` hay una constante `const ENCODING = 'pc858'` que selecciona el modo de codificación. Dos valores posibles:
+
+- `'pc858'` (default): emite `ESC t 19` después de `ESC @` y codifica el texto con `encodePC858()`.
+- `'strip'`: no emite el comando de codepage (ticket 100% ASCII). Antes de codificar, normaliza los acentos carácter a carácter: `á→a`, `é→e`, `í→i`, `ó→o`, `ú→u`, `ñ→n`, `ü→u`, `¡→!`, `¿→?`, `€→E` (y sus mayúsculas). Útil como fallback para impresoras que no reconocen PC858.
+
+Para cambiar de modo basta editar esa línea.
+
 ### Notas de implementación — Descubrimiento de impresoras
 
 #### Problema raíz: plugin TCP bloqueante en el bridge de Capacitor
